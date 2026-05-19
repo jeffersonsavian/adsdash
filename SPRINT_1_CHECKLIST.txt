@@ -1,0 +1,73 @@
+SPRINT 1 - CHECKLIST DE IMPLEMENTAÇÃO
+=====================================
+
+✅ CORE AUTHENTICATION
+  ✓ NextAuth v5 (Auth.js) configurado
+  ✓ Credentials provider (email + senha + bcryptjs)
+  ✓ JWT session com role no token
+  ✓ Login page com formulário
+  ✓ Middleware redireciona não-autenticado
+  ✓ signOut action disponível
+
+✅ CRIPTOGRAFIA
+  ✓ AES-256-GCM implementado em crypto.ts
+  ✓ encrypt() e decrypt() funções
+  ✓ Usa ENCRYPTION_KEY do .env
+
+✅ PRISMA + DATABASE
+  ✓ Schema Prisma v7 com 10 models completos
+  ✓ Prisma Client singleton gerado (pnpm prisma generate)
+  ✓ Migration SQL gerada offline: prisma/migrations/0_init/migration.sql
+  ✓ Seed script cria user owner + workspace demo
+  ✓ seed config adicionado ao package.json
+
+✅ MULTI-TENANCY
+  ✓ Workspace model com slug unique
+  ✓ WorkspaceUser com role (owner/manager/client)
+  ✓ getWorkspaceOrFail() valida acesso
+  ✓ Middleware injeta x-user-id header
+  ✓ Todas as queries filtram por workspaceId
+
+✅ API ROUTES
+  ✓ GET /api/workspaces (lista do usuário)
+  ✓ POST /api/workspaces (criar workspace + vínculo)
+  ✓ Auth route handlers (/api/auth/[...nextauth])
+
+✅ DASHBOARD UI
+  ✓ Layout com sidebar + WorkspaceSwitcher
+  ✓ Home page lista workspaces
+  ✓ Workspace dashboard (placeholder)
+  ✓ Workspace settings page
+  ✓ Create workspace form (/workspaces/new)
+
+✅ COMPONENTES UI
+  ✓ shadcn/ui: button, card, input, label
+  ✓ Select customizado (radix-ui)
+  ✓ WorkspaceSwitcher (client component)
+
+✅ VALIDAÇÃO
+  ✓ TypeScript: pnpm exec tsc --noEmit ✓
+  ✓ Build: pnpm build ✓ (sem banco)
+  ✓ Prisma generate: ✓
+  ✓ Route types: ✓
+
+✅ DOCUMENTAÇÃO
+  ✓ MIGRATIONS.md - instruções pós-banco
+  ✓ SPRINT_1_SUMMARY.md - resumo completo
+  ✓ PLAN.md atualizado com checkboxes
+  ✓ Comentários em código relevantes
+
+PENDÊNCIAS APÓS BANCO DISPONÍVEL
+=================================
+1. pnpm exec prisma migrate deploy
+2. pnpm exec prisma db seed (cria owner@example.com)
+3. pnpm dev (testar login/workspace)
+4. Próximo: Sprint 2 - Meta Ads Integration
+
+CREDENCIAIS DEMO
+================
+Email: owner@example.com
+Senha: password123
+Role: owner
+Workspace: coach-jack
+

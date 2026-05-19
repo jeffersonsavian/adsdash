@@ -1,0 +1,110 @@
+# docker/docker-compose.yml — AdsDash Stack for Docker Swarm
+# Deploy with: docker stack deploy -c docker-compose.yml adsdash
+#
+# Notes:
+# - Assumes traefik-public network exists (external: true)
+# - Assumes PostgreSQL already running on bancodedados01:5432
+# - Assumes Redis already running (configure REDIS_URL via secrets/env)
+# - Use Docker Swarm secrets for DATABASE_URL, REDIS_URL, NEXTAUTH_SECRET, ENCRYPTION_KEY
+
+version: '3.8'
+
+services:
+  app:
+    image: adsdash-app:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      NODE_ENV: production
+      # Database connection — pass via Docker secret or environment
+      # DATABASE_URL: set via docker secret or -e flag in stack deploy
+      # REDIS_URL: set via docker secret or -e flag
+      # NextAuth configuration
+      # NEXTAUTH_URL: set via -e flag or environment variable on host
+      # NEXTAUTH_SECRET: set via Docker secret or -e flag
+      # Encryption key for AdAccount tokens
+      # ENCRYPTION_KEY: set via Docker secret or -e flag
+    networks:
+      - traefik-public
+      - internal
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.adsdash.rule=Host(`adsdash.seudominio.com.br`)"
+        - "traefik.http.routers.adsdash.entrypoints=websecure"
+        - "traefik.http.routers.adsdash.tls.certresolver=letsencrypt"
+        - "traefik.http.services.adsdash.loadbalancer.server.port=3000"
+        - "traefik.http.routers.adsdash.middlewares=adsdash-headers"
+        - "traefik.http.middlewares.adsdash-headers.headers.customresponseheaders.X-Frame-Options=SAMEORIGIN"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart_policy:
+      condition: on-failure
+      delay: 5s
+      max_attempts: 3
+
+  worker:
+    image: adsdash-worker:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    environment:
+      NODE_ENV: production
+      # DATABASE_URL: set via docker secret or -e flag
+      # REDIS_URL: set via docker secret or -e flag
+      # ENCRYPTION_KEY: set via docker secret or -e flag (needed to decrypt tokens)
+    networks:
+      - internal
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 5s
+    restart_policy:
+      condition: on-failure
+      delay: 5s
+      max_attempts: 3
+
+  scheduler:
+    image: adsdash-worker:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    # Override default command to run scheduler in a loop
+    # Runs sync job enqueue every hour (3600 seconds)
+    command: >
+      sh -c "while true; do
+        echo '[Scheduler] Running sync enqueue at '$(date) &&
+        pnpm scheduler &&
+        echo '[Scheduler] Completed, sleeping 3600s until next run' &&
+        sleep 3600;
+      done"
+    environment:
+      NODE_ENV: production
+      # DATABASE_URL: set via docker secret or -e flag
+      # REDIS_URL: set via docker secret or -e flag
+    networks:
+      - internal
+    deploy:
+      replicas: 1
+    restart_policy:
+      condition: on-failure
+      delay: 5s
+      max_attempts: 3
+
+networks:
+  traefik-public:
+    external: true
+  internal:
+    driver: overlay
+    driver_opts:
+      com.docker.network.driver.overlay.vxlanid: "4096"

@@ -1,0 +1,29 @@
+# docker/Dockerfile.worker — AdsDash BullMQ Worker + Scheduler
+# Single-stage build suitable for background workers
+
+FROM node:20-alpine AS base
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+WORKDIR /app
+
+# Install dependencies
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+
+# Copy entire project
+COPY . .
+
+# Generate Prisma Client (required for worker/scheduler)
+RUN pnpm prisma generate
+
+# Copy prisma schema and migrations (Prisma runtime needs them)
+COPY prisma ./prisma
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && adduser -S worker -u 1001
+USER worker
+
+# Default command: run the BullMQ worker.
+# Use the pnpm script so node_modules/.bin (tsx) is on PATH.
+# Override the command (see docker-compose.yml) to run the scheduler.
+CMD ["pnpm", "worker"]

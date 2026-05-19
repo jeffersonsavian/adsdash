@@ -1,0 +1,61 @@
+# .dockerignore — Exclude unnecessary files from Docker build context
+
+# Dependencies
+node_modules
+pnpm-lock.yaml
+
+# Build outputs
+.next
+out
+dist
+build
+
+# Environment files (never include secrets)
+.env
+.env.local
+.env.*.local
+
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.circleci
+
+# Development
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Documentation (optional: reduce image size)
+*.md
+README.md
+CLAUDE.md
+PLAN.md
+MIGRATIONS.md
+adsdash-plano-node.md
+
+# Testing
+jest.config.js
+__tests__
+*.test.ts
+*.test.tsx
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# Misc
+.next/cache
+.turbo
+.swc
+.turbopack

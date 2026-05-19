@@ -1,0 +1,218 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Workspace {
+  id                  String   @id @default(uuid())
+  name                String
+  slug                String   @unique
+  logoUrl             String?
+  timezone            String   @default("America/Sao_Paulo")
+  currency            String   @default("BRL")
+  cpaAlertThreshold   Decimal? @db.Decimal(10, 2)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  users      WorkspaceUser[]
+  adAccounts AdAccount[]
+  campaigns  Campaign[]
+  adSets     AdSet[]
+  ads        Ad[]
+  metrics    AdMetric[]
+  annotations Annotation[]
+  syncLogs   SyncLog[]
+
+  @@map("workspaces")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("client")
+  createdAt    DateTime @default(now())
+
+  workspaces   WorkspaceUser[]
+  annotations  Annotation[]
+
+  @@map("users")
+}
+
+model WorkspaceUser {
+  workspaceId String
+  userId      String
+  role        String @default("client")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, userId])
+  @@map("workspace_users")
+}
+
+model AdAccount {
+  id                String    @id @default(uuid())
+  workspaceId       String
+  platform          String
+  externalAccountId String
+  name              String?
+  accessToken       String
+  tokenExpiresAt    DateTime?
+  isActive          Boolean   @default(true)
+  lastSyncedAt      DateTime?
+  createdAt         DateTime  @default(now())
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  metrics   AdMetric[]
+  syncLogs  SyncLog[]
+
+  @@unique([workspaceId, externalAccountId, platform])
+  @@map("ad_accounts")
+}
+
+model Campaign {
+  id              String    @id @default(uuid())
+  workspaceId     String
+  adAccountId     String
+  externalId      String
+  platform        String
+  name            String
+  status          String?
+  objective       String?
+  dailyBudget     Decimal?  @db.Decimal(12, 2)
+  lifetimeBudget  Decimal?  @db.Decimal(12, 2)
+  startDate       DateTime?
+  endDate         DateTime?
+  createdAt       DateTime  @default(now())
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id])
+  adSets    AdSet[]
+
+  @@unique([adAccountId, externalId])
+  @@map("campaigns")
+}
+
+model AdSet {
+  id          String   @id @default(uuid())
+  workspaceId String
+  campaignId  String
+  externalId  String
+  name        String
+  status      String?
+  dailyBudget Decimal? @db.Decimal(12, 2)
+  bidStrategy String?
+  targeting   Json?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id])
+  campaign  Campaign   @relation(fields: [campaignId], references: [id])
+  ads       Ad[]
+
+  @@unique([campaignId, externalId])
+  @@map("ad_sets")
+}
+
+model Ad {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  adSetId       String
+  externalId    String
+  name          String
+  status        String?
+  creativeType  String?
+  thumbnailUrl  String?
+  createdAt     DateTime @default(now())
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id])
+  adSet     AdSet      @relation(fields: [adSetId], references: [id])
+
+  @@unique([adSetId, externalId])
+  @@map("ads")
+}
+
+model AdMetric {
+  id               String   @id @default(uuid())
+  workspaceId      String
+  adAccountId      String
+  entityType       String
+  entityId         String
+  externalEntityId String?
+  date             DateTime @db.Date
+  platform         String
+
+  impressions  Int     @default(0)
+  reach        Int     @default(0)
+  frequency    Decimal? @db.Decimal(8, 4)
+  clicks       Int     @default(0)
+  uniqueClicks Int     @default(0)
+  linkClicks   Int     @default(0)
+
+  spend Decimal  @default(0) @db.Decimal(12, 2)
+  cpm   Decimal? @db.Decimal(10, 4)
+  cpc   Decimal? @db.Decimal(10, 4)
+  ctr   Decimal? @db.Decimal(8, 4)
+
+  leads           Int     @default(0)
+  purchases       Int     @default(0)
+  addToCart       Int     @default(0)
+  viewContent     Int     @default(0)
+  conversions     Int     @default(0)
+  conversionValue Decimal @default(0) @db.Decimal(12, 2)
+
+  cpl  Decimal? @db.Decimal(10, 4)
+  cpa  Decimal? @db.Decimal(10, 4)
+  roas Decimal? @db.Decimal(10, 4)
+
+  rawData  Json?
+  syncedAt DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  adAccount AdAccount @relation(fields: [adAccountId], references: [id])
+
+  @@unique([entityType, entityId, date, platform])
+  @@index([workspaceId, date])
+  @@index([entityType, entityId])
+  @@map("ad_metrics")
+}
+
+model SyncLog {
+  id             String    @id @default(uuid())
+  workspaceId    String
+  adAccountId    String
+  platform       String
+  status         String
+  dateRangeStart DateTime? @db.Date
+  dateRangeEnd   DateTime? @db.Date
+  recordsSynced  Int       @default(0)
+  errorMessage   String?
+  durationMs     Int?
+  startedAt      DateTime  @default(now())
+  finishedAt     DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  adAccount AdAccount @relation(fields: [adAccountId], references: [id])
+
+  @@map("sync_logs")
+}
+
+model Annotation {
+  id          String   @id @default(uuid())
+  workspaceId String
+  date        DateTime @db.Date
+  title       String
+  description String?
+  type        String   @default("note")
+  createdById String
+  createdAt   DateTime @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  createdBy   User      @relation(fields: [createdById], references: [id])
+
+  @@map("annotations")
+}
