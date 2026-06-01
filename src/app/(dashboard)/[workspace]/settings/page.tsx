@@ -1,6 +1,6 @@
+import { Suspense } from 'react'
 import { auth } from '@/lib/auth'
 import { getWorkspaceOrFail } from '@/lib/workspace'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { SettingsContent } from './settings-content'
@@ -37,12 +37,14 @@ export default async function WorkspaceSettingsPage({
   })
 
   return (
-    <SettingsContent
-      workspaceSlug={workspace.slug}
-      workspaceName={workspace.name}
-      workspaceTimezone={workspace.timezone}
-      workspaceCurrency={workspace.currency}
-      initialAdAccounts={adAccounts}
-    />
+    <Suspense fallback={null}>
+      <SettingsContent
+        workspaceSlug={workspace.slug}
+        workspaceName={workspace.name}
+        workspaceTimezone={workspace.timezone}
+        workspaceCurrency={workspace.currency}
+        initialAdAccounts={adAccounts}
+      />
+    </Suspense>
   )
 }

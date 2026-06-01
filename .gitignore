@@ -52,3 +52,4 @@ dist/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+utmify/

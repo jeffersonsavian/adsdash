@@ -2,16 +2,14 @@ import { ReactNode } from 'react'
 import Link from 'next/link'
 import { auth, signOut } from '@/lib/auth'
 import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher'
-import { Button } from '@/components/ui/button'
+import { SidebarNav } from '@/components/SidebarNav'
 import { redirect } from 'next/navigation'
 
 interface DashboardLayoutProps {
   children: ReactNode
 }
 
-export default async function DashboardLayout({
-  children,
-}: DashboardLayoutProps) {
+export default async function DashboardLayout({ children }: DashboardLayoutProps) {
   const session = await auth()
 
   if (!session) {
@@ -19,43 +17,41 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen" style={{ backgroundColor: '#0a0f1e', color: '#f1f5f9' }}>
       {/* Sidebar */}
-      <aside className="w-64 border-r border-border bg-card p-4 flex flex-col">
-        <div className="mb-8">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded bg-primary flex items-center justify-center text-white font-bold">
+      <aside
+        className="w-60 flex flex-col flex-shrink-0 border-r"
+        style={{ backgroundColor: '#0d1424', borderColor: '#1e293b' }}
+      >
+        {/* Logo */}
+        <div className="px-5 py-5 border-b" style={{ borderColor: '#1e293b' }}>
+          <Link href="/" className="flex items-center gap-2.5">
+            <div
+              className="h-7 w-7 rounded-lg flex items-center justify-center text-white text-sm font-bold"
+              style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)' }}
+            >
               A
             </div>
-            <span className="font-bold text-lg">AdsDash</span>
+            <span className="font-bold text-base tracking-tight">AdsDash</span>
           </Link>
         </div>
 
-        <div className="mb-8">
-          <h3 className="text-xs font-semibold text-muted-foreground mb-2 px-2">
-            WORKSPACE
-          </h3>
+        {/* Workspace switcher */}
+        <div className="px-4 py-4 border-b" style={{ borderColor: '#1e293b' }}>
+          <p className="text-[10px] font-semibold tracking-widest uppercase mb-2 px-1" style={{ color: '#475569' }}>
+            Workspace
+          </p>
           <WorkspaceSwitcher />
         </div>
 
-        <nav className="space-y-2 flex-1">
-          <Link
-            href="/dashboard"
-            className="block px-3 py-2 rounded-lg text-sm hover:bg-accent"
-          >
-            Dashboard
-          </Link>
-          <Link
-            href="/settings"
-            className="block px-3 py-2 rounded-lg text-sm hover:bg-accent"
-          >
-            Configurações
-          </Link>
-        </nav>
+        {/* Navigation */}
+        <div className="flex-1 px-3 py-4 overflow-y-auto">
+          <SidebarNav role={(session.user as any)?.role} />
+        </div>
 
-        {/* User Section */}
-        <div className="border-t border-border pt-4 mt-auto">
-          <p className="text-sm text-muted-foreground mb-3">
+        {/* User */}
+        <div className="px-4 py-4 border-t" style={{ borderColor: '#1e293b' }}>
+          <p className="text-xs truncate mb-3" style={{ color: '#475569' }}>
             {session.user?.email}
           </p>
           <form
@@ -64,16 +60,20 @@ export default async function DashboardLayout({
               await signOut({ redirectTo: '/login' })
             }}
           >
-            <Button variant="outline" size="sm" className="w-full" type="submit">
+            <button
+              type="submit"
+              className="w-full py-1.5 px-3 text-xs rounded-lg border transition-colors hover:opacity-80 text-left"
+              style={{ borderColor: '#1e293b', backgroundColor: '#111827', color: '#94a3b8' }}
+            >
               Sair
-            </Button>
+            </button>
           </form>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-auto">
-        <div className="h-full w-full">{children}</div>
+      {/* Main */}
+      <main className="flex-1 overflow-auto" style={{ backgroundColor: '#0a0f1e' }}>
+        {children}
       </main>
     </div>
   )

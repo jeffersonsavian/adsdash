@@ -27,13 +27,12 @@ export async function syncMetaAccount(
       where: { id: adAccountId },
     })
 
-    // Criar SyncLog
     const log = await prisma.syncLog.create({
       data: {
         workspaceId: account.workspaceId,
         adAccountId: account.id,
         platform: 'meta',
-        status: 'success',
+        status: 'running',
         dateRangeStart: new Date(dateStart),
         dateRangeEnd: new Date(dateEnd),
       },
@@ -42,7 +41,10 @@ export async function syncMetaAccount(
     try {
       const accessToken = decrypt(account.accessToken)
 
-      // Sync em três níveis: campaign, adset, ad
+      // Maps externalId → internalId para evitar lookups repetidos
+      const campaignIdMap = new Map<string, string>()
+      const adsetIdMap = new Map<string, string>()
+
       for (const level of ['campaign', 'adset', 'ad'] as const) {
         const rows = await fetchInsights({
           accessToken,
@@ -53,9 +55,116 @@ export async function syncMetaAccount(
         })
 
         for (const row of rows) {
-          const normalized = normalizeInsightRow(row, level)
+          // ── Upsert Campaign ──────────────────────────────────────────
+          if (level === 'campaign' && row.campaign_id && row.campaign_name) {
+            const campaign = await prisma.campaign.upsert({
+              where: {
+                adAccountId_externalId: {
+                  adAccountId: account.id,
+                  externalId: row.campaign_id,
+                },
+              },
+              update: { name: row.campaign_name },
+              create: {
+                workspaceId: account.workspaceId,
+                adAccountId: account.id,
+                externalId: row.campaign_id,
+                platform: 'meta',
+                name: row.campaign_name,
+              },
+            })
+            campaignIdMap.set(row.campaign_id, campaign.id)
+          }
 
-          // Prepare data for database (exclude rawData for now, extract only JSON-compatible fields)
+          // ── Upsert AdSet ─────────────────────────────────────────────
+          if (level === 'adset' && row.adset_id && row.adset_name) {
+            let internalCampaignId = row.campaign_id
+              ? campaignIdMap.get(row.campaign_id)
+              : undefined
+
+            if (!internalCampaignId && row.campaign_id) {
+              const c = await prisma.campaign.findFirst({
+                where: { adAccountId: account.id, externalId: row.campaign_id },
+              })
+              if (c) {
+                internalCampaignId = c.id
+                campaignIdMap.set(row.campaign_id, c.id)
+              }
+            }
+
+            if (internalCampaignId) {
+              const adset = await prisma.adSet.upsert({
+                where: {
+                  campaignId_externalId: {
+                    campaignId: internalCampaignId,
+                    externalId: row.adset_id,
+                  },
+                },
+                update: { name: row.adset_name },
+                create: {
+                  workspaceId: account.workspaceId,
+                  campaignId: internalCampaignId,
+                  externalId: row.adset_id,
+                  name: row.adset_name,
+                },
+              })
+              adsetIdMap.set(row.adset_id, adset.id)
+            }
+          }
+
+          // ── Upsert Ad ────────────────────────────────────────────────
+          if (level === 'ad' && row.ad_id && row.ad_name) {
+            let internalAdsetId = row.adset_id
+              ? adsetIdMap.get(row.adset_id)
+              : undefined
+
+            if (!internalAdsetId && row.adset_id) {
+              let internalCampaignId = row.campaign_id
+                ? campaignIdMap.get(row.campaign_id)
+                : undefined
+
+              if (!internalCampaignId && row.campaign_id) {
+                const c = await prisma.campaign.findFirst({
+                  where: { adAccountId: account.id, externalId: row.campaign_id },
+                })
+                if (c) internalCampaignId = c.id
+              }
+
+              if (internalCampaignId) {
+                const adset = await prisma.adSet.findFirst({
+                  where: {
+                    campaignId: internalCampaignId,
+                    externalId: row.adset_id,
+                  },
+                })
+                if (adset) {
+                  internalAdsetId = adset.id
+                  adsetIdMap.set(row.adset_id, adset.id)
+                }
+              }
+            }
+
+            if (internalAdsetId) {
+              await prisma.ad.upsert({
+                where: {
+                  adSetId_externalId: {
+                    adSetId: internalAdsetId,
+                    externalId: row.ad_id,
+                  },
+                },
+                update: { name: row.ad_name },
+                create: {
+                  workspaceId: account.workspaceId,
+                  adSetId: internalAdsetId,
+                  externalId: row.ad_id,
+                  name: row.ad_name,
+                },
+              })
+            }
+          }
+
+          // ── Upsert AdMetric ──────────────────────────────────────────
+          const normalized = normalizeInsightRow(row, level)
           const { rawData, ...dbData } = normalized
 
           await prisma.adMetric.upsert({
@@ -81,7 +190,6 @@ export async function syncMetaAccount(
         }
       }
 
-      // Atualizar SyncLog com sucesso
       await prisma.syncLog.update({
         where: { id: log.id },
         data: {
@@ -92,7 +200,6 @@ export async function syncMetaAccount(
         },
       })
 
-      // Atualizar lastSyncedAt da conta
       await prisma.adAccount.update({
         where: { id: adAccountId },
         data: { lastSyncedAt: new Date() },
@@ -104,7 +211,6 @@ export async function syncMetaAccount(
         status: 'success',
       }
     } catch (err: any) {
-      // Atualizar SyncLog com erro
       await prisma.syncLog.update({
         where: { id: log.id },
         data: {

@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model Workspace {
@@ -15,17 +14,23 @@ model Workspace {
   timezone            String   @default("America/Sao_Paulo")
   currency            String   @default("BRL")
   cpaAlertThreshold   Decimal? @db.Decimal(10, 2)
+  metaAppId           String?
+  metaAppSecret       String?  // AES-256-GCM encrypted
+  planName            String   @default("free")
+  maxAdAccounts       Int      @default(1)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  users      WorkspaceUser[]
-  adAccounts AdAccount[]
-  campaigns  Campaign[]
-  adSets     AdSet[]
-  ads        Ad[]
-  metrics    AdMetric[]
-  annotations Annotation[]
-  syncLogs   SyncLog[]
+  users        WorkspaceUser[]
+  adAccounts   AdAccount[]
+  campaigns    Campaign[]
+  adSets       AdSet[]
+  ads          Ad[]
+  metrics      AdMetric[]
+  annotations  Annotation[]
+  syncLogs     SyncLog[]
+  integrations Integration[]
+  sales        Sale[]
 
   @@map("workspaces")
 }
@@ -34,8 +39,9 @@ model User {
   id           String   @id @default(uuid())
   name         String
   email        String   @unique
-  passwordHash String
-  role         String   @default("client")
+  passwordHash String?  // nullable: null = must set password on first login
+  role         String   @default("client") // client | owner | superadmin
+  isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
 
   workspaces   WorkspaceUser[]
@@ -68,9 +74,11 @@ model AdAccount {
   lastSyncedAt      DateTime?
   createdAt         DateTime  @default(now())
 
-  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  metrics   AdMetric[]
-  syncLogs  SyncLog[]
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  metrics      AdMetric[]
+  syncLogs     SyncLog[]
+  integrations Integration[]
+  sales        Sale[]
 
   @@unique([workspaceId, externalAccountId, platform])
   @@map("ad_accounts")
@@ -215,4 +223,84 @@ model Annotation {
   createdBy   User      @relation(fields: [createdById], references: [id])
 
   @@map("annotations")
+}
+
+model Integration {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  adAccountId  String?  // nullable: phase A — will be required after backfill
+  platform     String   // 'kiwify' | 'hotmart'
+  name         String?  // apelido opcional
+  webhookToken String   // token/signature enviado pela plataforma para validação
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  adAccount AdAccount? @relation(fields: [adAccountId], references: [id], onDelete: SetNull)
+  sales     Sale[]
+
+  @@unique([adAccountId, platform])
+  @@map("integrations")
+}
+
+model Sale {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  integrationId String
+  platform      String   // 'kiwify' | 'hotmart'
+
+  externalId    String   // order_id da plataforma
+  status        String   // paid | refunded | chargeback | canceled | waiting_payment
+  event         String   // order_approved | order_refunded | etc.
+
+  // Valores em centavos
+  grossAmount   Int      // valor bruto total
+  netAmount     Int      // comissão líquida recebida
+  platformFee   Int      @default(0)
+  currency      String   @default("BRL")
+
+  paymentMethod String?  // pix | credit_card | boleto
+  installments  Int      @default(1)
+
+  productId     String?
+  productName   String?
+  offerName     String?
+
+  customerEmail String?
+  customerName  String?
+
+  // UTMs raw (formato "Nome|ID")
+  utmSource     String?
+  utmMedium     String?
+  utmCampaign   String?  // "CampaignName|CampaignId"
+  utmContent    String?  // "AdSetName|AdSetId"
+  utmTerm       String?  // "AdName|AdId" ou placement
+
+  // IDs Meta parseados do UTM
+  metaCampaignId   String?
+  metaCampaignName String?
+  metaAdsetId      String?
+  metaAdsetName    String?
+  metaAdId         String?
+  metaAdName       String?
+
+  fundsStatus   String?
+  approvedAt    DateTime?
+  refundedAt    DateTime?
+
+  adAccountId String?  // nullable: populated via integration.adAccount on webhook
+
+  rawData   Json?
+  createdAt DateTime @default(now())
+
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id])
+  integration Integration @relation(fields: [integrationId], references: [id])
+  adAccount   AdAccount?  @relation(fields: [adAccountId], references: [id])
+
+  @@unique([platform, externalId])
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, status])
+  @@index([metaCampaignId])
+  @@index([metaAdsetId])
+  @@map("sales")
 }

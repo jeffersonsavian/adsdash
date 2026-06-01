@@ -1,22 +1,30 @@
+import NextAuth from 'next-auth'
 import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
-import { auth } from '@/lib/auth'
+import { authConfig } from '@/lib/auth.config'
 
-export async function middleware(request: NextRequest) {
-  const session = await auth()
+const { auth } = NextAuth(authConfig)
 
-  // Redirect unauthenticated users to login
-  if (!session) {
-    return NextResponse.redirect(new URL('/login', request.url))
+export default auth((request) => {
+  if (!request.auth) {
+    const loginUrl = new URL('/login', request.url)
+    return NextResponse.redirect(loginUrl)
   }
 
-  // Inject user ID in header for Server Components
-  const response = NextResponse.next()
-  response.headers.set('x-user-id', session.user?.id || '')
+  const role = (request.auth.user as any)?.role as string | undefined
 
+  // Protect /admin routes — superadmin only
+  if (request.nextUrl.pathname.startsWith('/admin')) {
+    if (role !== 'superadmin') {
+      return NextResponse.redirect(new URL('/', request.url))
+    }
+  }
+
+  const response = NextResponse.next()
+  response.headers.set('x-user-id', request.auth.user?.id || '')
+  response.headers.set('x-user-role', role || '')
   return response
-}
+})
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|login|api/auth).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|login|api/auth|api/webhooks|api/v1).*)'],
 }

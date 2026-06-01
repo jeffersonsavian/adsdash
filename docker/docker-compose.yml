@@ -35,7 +35,7 @@ services:
         delay: 10s
       labels:
         - "traefik.enable=true"
-        - "traefik.http.routers.adsdash.rule=Host(`adsdash.seudominio.com.br`)"
+        - "traefik.http.routers.adsdash.rule=Host(`adsdash.decisaobuilder.com.br`)"
         - "traefik.http.routers.adsdash.entrypoints=websecure"
         - "traefik.http.routers.adsdash.tls.certresolver=letsencrypt"
         - "traefik.http.services.adsdash.loadbalancer.server.port=3000"

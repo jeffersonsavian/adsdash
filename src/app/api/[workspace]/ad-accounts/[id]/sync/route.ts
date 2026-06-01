@@ -28,14 +28,14 @@ export async function POST(
       return NextResponse.json({ error: 'Ad account not found' }, { status: 404 })
     }
 
-    // Get date range from query or use default (yesterday)
+    // Get date range from body or use default (last 30 days)
     const body = await req.json().catch(() => ({}))
-    const yesterday = new Date()
-    yesterday.setDate(yesterday.getDate() - 1)
-    const defaultDate = yesterday.toISOString().split('T')[0]
+    const today = new Date()
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(today.getDate() - 30)
 
-    const dateStart = body.dateStart || defaultDate
-    const dateEnd = body.dateEnd || defaultDate
+    const dateStart = body.dateStart || thirtyDaysAgo.toISOString().split('T')[0]
+    const dateEnd = body.dateEnd || today.toISOString().split('T')[0]
 
     // Enqueue the sync job
     await enqueueSyncJob({

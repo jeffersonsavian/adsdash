@@ -1,10 +1,24 @@
+import 'dotenv/config'
 import { PrismaClient } from '@prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
 import { hash } from 'bcryptjs'
+import { randomBytes } from 'crypto'
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }),
+})
 
 async function main() {
-  // Clean existing data (dev only)
+  // Clean existing data (dev only) — order respects FK constraints
+  await prisma.sale.deleteMany()
+  await prisma.syncLog.deleteMany()
+  await prisma.adMetric.deleteMany()
+  await prisma.annotation.deleteMany()
+  await prisma.integration.deleteMany()
+  await prisma.adAccount.deleteMany()
+  await prisma.ad.deleteMany()
+  await prisma.adSet.deleteMany()
+  await prisma.campaign.deleteMany()
   await prisma.workspaceUser.deleteMany()
   await prisma.workspace.deleteMany()
   await prisma.user.deleteMany()
@@ -19,6 +33,18 @@ async function main() {
     },
   })
 
+  // Create superadmin — passwordHash null so first login forces password setup
+  // In dev, generate a temp password and print to console
+  const tempPassword = randomBytes(12).toString('hex')
+  const superadmin = await prisma.user.create({
+    data: {
+      name: 'Super Admin',
+      email: 'superadmin@adsdash.com',
+      passwordHash: await hash(tempPassword, 10),
+      role: 'superadmin',
+    },
+  })
+
   // Create a sample workspace
   const workspace = await prisma.workspace.create({
     data: {
@@ -26,6 +52,8 @@ async function main() {
       slug: 'coach-jack',
       timezone: 'America/Sao_Paulo',
       currency: 'BRL',
+      planName: 'pro',
+      maxAdAccounts: 5,
     },
   })
 
@@ -38,9 +66,10 @@ async function main() {
     },
   })
 
-  console.log('Seed completed!')
-  console.log(`Created user: ${ownerUser.email}`)
-  console.log(`Created workspace: ${workspace.slug}`)
+  console.log('\n✅ Seed completed!')
+  console.log(`   Owner:      ${ownerUser.email} / password123`)
+  console.log(`   Superadmin: ${superadmin.email} / ${tempPassword}  ← change after first login!`)
+  console.log(`   Workspace:  /${workspace.slug}`)
 }
 
 main()

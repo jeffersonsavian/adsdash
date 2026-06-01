@@ -60,15 +60,15 @@ export async function GET(
       SELECT
         date,
         SUM(CAST(spend AS FLOAT)) AS spend,
-        SUM(CAST(leads AS INT)) AS leads,
-        SUM(CAST(purchases AS INT)) AS purchases,
-        CASE WHEN SUM(CAST(leads AS INT)) > 0
-          THEN (SUM(CAST(spend AS FLOAT)) / SUM(CAST(leads AS INT))) ELSE 0 END AS cpl,
+        SUM(CAST(leads AS BIGINT)) AS leads,
+        SUM(CAST(purchases AS BIGINT)) AS purchases,
+        CASE WHEN SUM(CAST(leads AS BIGINT)) > 0
+          THEN (SUM(CAST(spend AS FLOAT)) / SUM(CAST(leads AS BIGINT))) ELSE 0 END AS cpl,
         CASE WHEN SUM(CAST(spend AS FLOAT)) > 0
           THEN (SUM(CAST("conversionValue" AS FLOAT)) / SUM(CAST(spend AS FLOAT))) ELSE 0 END AS roas
       FROM ad_metrics
-      WHERE workspace_id = ${workspace.id}
-        AND entity_type = 'campaign'
+      WHERE "workspaceId" = ${workspace.id}
+        AND "entityType" = 'campaign'
         AND date BETWEEN ${new Date(dateStart)} AND ${new Date(dateEnd)}
       GROUP BY date
       ORDER BY date ASC
@@ -94,19 +94,19 @@ export async function GET(
         c.name,
         c.status,
         SUM(CAST(m.spend AS FLOAT)) AS spend,
-        SUM(CAST(m.impressions AS INT)) AS impressions,
-        SUM(CAST(m.clicks AS INT)) AS clicks,
-        SUM(CAST(m.leads AS INT)) AS leads,
-        SUM(CAST(m.purchases AS INT)) AS purchases,
-        CASE WHEN SUM(CAST(m.leads AS INT)) > 0
-          THEN (SUM(CAST(m.spend AS FLOAT)) / SUM(CAST(m.leads AS INT))) ELSE NULL END AS cpl,
+        SUM(CAST(m.impressions AS BIGINT)) AS impressions,
+        SUM(CAST(m.clicks AS BIGINT)) AS clicks,
+        SUM(CAST(m.leads AS BIGINT)) AS leads,
+        SUM(CAST(m.purchases AS BIGINT)) AS purchases,
+        CASE WHEN SUM(CAST(m.leads AS BIGINT)) > 0
+          THEN (SUM(CAST(m.spend AS FLOAT)) / SUM(CAST(m.leads AS BIGINT))) ELSE NULL END AS cpl,
         CASE WHEN SUM(CAST(m.spend AS FLOAT)) > 0
           THEN (SUM(CAST(m."conversionValue" AS FLOAT)) / SUM(CAST(m.spend AS FLOAT))) ELSE NULL END AS roas
       FROM ad_metrics m
       JOIN campaigns c ON c."externalId" = m."externalEntityId"
         AND c."workspaceId" = ${workspace.id}
-      WHERE m.workspace_id = ${workspace.id}
-        AND m.entity_type = 'campaign'
+      WHERE m."workspaceId" = ${workspace.id}
+        AND m."entityType" = 'campaign'
         AND m.date BETWEEN ${new Date(dateStart)} AND ${new Date(dateEnd)}
       GROUP BY c.id, c.name, c.status
       ORDER BY spend DESC

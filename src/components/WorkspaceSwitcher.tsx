@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import {
   Select,
   SelectContent,
@@ -22,8 +22,12 @@ interface Workspace {
 
 export function WorkspaceSwitcher() {
   const router = useRouter()
+  const pathname = usePathname()
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [isLoading, setIsLoading] = useState(true)
+
+  // Extract current workspace slug from URL (first segment after /)
+  const currentSlug = pathname.split('/')[1] ?? ''
 
   useEffect(() => {
     const fetchWorkspaces = async () => {
@@ -53,7 +57,7 @@ export function WorkspaceSwitcher() {
 
   return (
     <div className="flex items-center gap-2">
-      <Select value="" onValueChange={handleWorkspaceChange}>
+      <Select value={currentSlug} onValueChange={handleWorkspaceChange}>
         <SelectTrigger className="w-[200px]">
           <SelectValue placeholder="Selecionar workspace" />
         </SelectTrigger>

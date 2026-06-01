@@ -72,14 +72,19 @@ export async function fetchInsights({
     limit: '500',
   })
 
-  const res = await fetch(`${BASE_URL}/act_${accountId}/insights?${params}`)
+  const url = `${BASE_URL}/act_${accountId}/insights?${params}`
+  console.log(`[Meta API] GET ${level} insights: act_${accountId} ${dateStart}→${dateEnd}`)
+
+  const res = await fetch(url)
 
   if (!res.ok) {
     const err = await res.json()
+    console.error('[Meta API] Error:', JSON.stringify(err))
     throw new Error(`Meta API error: ${err.error?.message}`)
   }
 
   const data = await res.json()
+  console.log(`[Meta API] ${level}: ${(data.data || []).length} rows returned`)
   return (data.data || []) as MetaInsightRow[]
 }
 
