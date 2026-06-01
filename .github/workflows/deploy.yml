@@ -1,0 +1,110 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_APP: ghcr.io/${{ github.repository_owner }}/adsdash-app
+  IMAGE_WORKER: ghcr.io/${{ github.repository_owner }}/adsdash-worker
+
+jobs:
+  # ── 1. Build e push das imagens ──────────────────────────────────────────────
+  build-and-push:
+    name: Build & Push Docker images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login no GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push — App (Next.js)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_APP }}:latest
+            ${{ env.IMAGE_APP }}:sha-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & push — Worker (BullMQ)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.worker
+          push: true
+          tags: |
+            ${{ env.IMAGE_WORKER }}:latest
+            ${{ env.IMAGE_WORKER }}:sha-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── 2. Deploy no Swarm via SSH ───────────────────────────────────────────────
+  deploy:
+    name: Deploy to Swarm (manager01)
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    steps:
+      - name: Checkout (para copiar docker-compose.yml)
+        uses: actions/checkout@v4
+
+      - name: Copiar docker-compose.yml para o servidor
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: "docker/docker-compose.yml"
+          target: "/opt/adsdash/"
+          strip_components: 1   # remove o prefixo "docker/"
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+
+            # Autenticar no GHCR para puxar imagens privadas
+            echo "${{ secrets.GHCR_TOKEN }}" | \
+              docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Puxar imagens atualizadas
+            docker pull ghcr.io/${{ github.repository_owner }}/adsdash-app:latest
+            docker pull ghcr.io/${{ github.repository_owner }}/adsdash-worker:latest
+
+            # Rodar migrations (container temporário que se auto-destrói)
+            docker run --rm \
+              --env-file /opt/adsdash/.env \
+              -e NODE_ENV=production \
+              ghcr.io/${{ github.repository_owner }}/adsdash-app:latest \
+              sh -c "node_modules/.bin/prisma migrate deploy"
+
+            # Atualizar o stack no Swarm
+            docker stack deploy \
+              --with-registry-auth \
+              --compose-file /opt/adsdash/docker-compose.yml \
+              adsdash
+
+            echo "✅ Deploy concluído em $(date)"
