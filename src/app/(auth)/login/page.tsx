@@ -30,7 +30,7 @@ export default function LoginPage() {
       if (result?.error) {
         setError(result.error || 'Falha ao fazer login')
       } else if (result?.ok) {
-        router.push('/dashboard')
+        router.push('/')
       }
     } catch (err: any) {
       setError(err.message || 'Erro ao fazer login')
@@ -87,12 +87,6 @@ export default function LoginPage() {
             {isLoading ? 'Entrando...' : 'Entrar'}
           </Button>
         </form>
-
-        <div className="mt-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-700">
-          <p className="font-semibold">Demo</p>
-          <p>Email: owner@example.com</p>
-          <p>Senha: password123</p>
-        </div>
       </CardContent>
     </Card>
   )

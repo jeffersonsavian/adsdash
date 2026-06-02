@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Users, Building2, ArrowLeft } from 'lucide-react'
+import { LayoutDashboard, Users, Building2, CreditCard, ArrowLeft } from 'lucide-react'
 
 const navItems = [
   { label: 'Visão Geral',   icon: LayoutDashboard, href: '/admin' },
   { label: 'Usuários',      icon: Users,            href: '/admin/users' },
   { label: 'Workspaces',    icon: Building2,        href: '/admin/workspaces' },
+  { label: 'Planos',        icon: CreditCard,       href: '/admin/plans' },
 ]
 
 export function AdminSidebarNav() {

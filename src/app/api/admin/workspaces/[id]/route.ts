@@ -46,14 +46,30 @@ export async function PATCH(
 
   const { id } = await params
   const body = await request.json()
-  const { name, planName, maxAdAccounts, timezone, currency } = body
+  const { name, planId, planName, maxAdAccounts, timezone, currency } = body
 
   const data: Record<string, unknown> = {}
   if (name !== undefined) data.name = name
-  if (planName !== undefined) data.planName = planName
-  if (maxAdAccounts !== undefined) data.maxAdAccounts = Number(maxAdAccounts)
   if (timezone !== undefined) data.timezone = timezone
   if (currency !== undefined) data.currency = currency
+
+  // Atribuir plano: deriva planName/maxAdAccounts a partir do plano escolhido
+  if (planId !== undefined) {
+    if (planId) {
+      const plan = await prisma.plan.findUnique({ where: { id: planId } })
+      if (!plan) {
+        return NextResponse.json({ error: 'Plano não encontrado' }, { status: 400 })
+      }
+      data.planId = plan.id
+      data.planName = plan.name
+      data.maxAdAccounts = plan.maxAdAccounts
+    } else {
+      data.planId = null
+    }
+  }
+  // Overrides manuais (aplicados após o plano, se enviados explicitamente)
+  if (planName !== undefined) data.planName = planName
+  if (maxAdAccounts !== undefined) data.maxAdAccounts = Number(maxAdAccounts)
 
   const workspace = await prisma.workspace.update({
     where: { id },

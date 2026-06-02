@@ -3,13 +3,14 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { decrypt, encrypt } from '@/lib/crypto'
 import { getRedis } from '@/lib/redis'
+import { publicUrl } from '@/lib/url'
 
 const GRAPH = 'https://graph.facebook.com/v19.0'
 
 export async function GET(request: NextRequest) {
   const session = await auth()
   if (!session?.user?.id) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    return NextResponse.redirect(publicUrl('/login', request))
   }
 
   const { searchParams } = request.nextUrl
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
     // User denied OAuth
     const errorDesc = searchParams.get('error_description') || 'Acesso negado'
     return NextResponse.redirect(
-      new URL(`/?oauth_error=${encodeURIComponent(errorDesc)}`, request.url)
+      publicUrl(`/?oauth_error=${encodeURIComponent(errorDesc)}`, request)
     )
   }
 
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
   }
 
   const metaAppSecret = decrypt(workspace.metaAppSecret)
-  const callbackUrl = new URL('/api/oauth/meta/callback', request.url).toString()
+  const callbackUrl = publicUrl('/api/oauth/meta/callback', request)
 
   // Exchange code for short-lived token
   const tokenRes = await fetch(
@@ -114,7 +115,7 @@ export async function GET(request: NextRequest) {
   }))
 
   // Redirect to settings with selection token
-  const redirectUrl = new URL(`/${slug}/settings`, request.url)
+  const redirectUrl = new URL(publicUrl(`/${slug}/settings`, request))
   redirectUrl.searchParams.set('oauth', 'select')
   redirectUrl.searchParams.set('key', encodeURIComponent(selectionKey))
   return NextResponse.redirect(redirectUrl)

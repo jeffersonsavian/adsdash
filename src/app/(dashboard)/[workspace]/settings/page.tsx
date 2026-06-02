@@ -21,7 +21,16 @@ export default async function WorkspaceSettingsPage({
   }
 
   const { workspace: workspaceSlug } = await paramsPromise
-  const workspace = await getWorkspaceOrFail(workspaceSlug, session.user.id)
+
+  let workspace
+  try {
+    workspace = await getWorkspaceOrFail(workspaceSlug, session.user.id)
+  } catch {
+    redirect('/')
+  }
+  if (!workspace) {
+    redirect('/')
+  }
 
   const adAccounts = await prisma.adAccount.findMany({
     where: { workspaceId: workspace.id },

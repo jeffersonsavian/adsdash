@@ -11,7 +11,8 @@
     "scheduler": "tsx src/worker/scheduler.ts",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "db:seed-prod": "tsx prisma/seed-prod.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -7,6 +7,7 @@ interface Workspace {
   id: string
   name: string
   slug: string
+  planId: string | null
   planName: string
   maxAdAccounts: number
   timezone: string
@@ -21,26 +22,34 @@ interface UserOption {
   email: string
 }
 
-const PLANS = ['free', 'starter', 'pro', 'enterprise']
+interface PlanOption {
+  id: string
+  name: string
+  maxAdAccounts: number
+  isActive: boolean
+}
 
 export default function AdminWorkspacesPage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [users, setUsers] = useState<UserOption[]>([])
+  const [plans, setPlans] = useState<PlanOption[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
-  const [editing, setEditing] = useState<{ id: string; planName: string; maxAdAccounts: number } | null>(null)
-  const [form, setForm] = useState({ name: '', ownerUserId: '', planName: 'free', maxAdAccounts: 1 })
+  const [editing, setEditing] = useState<{ id: string; planId: string } | null>(null)
+  const [form, setForm] = useState({ name: '', ownerUserId: '', planId: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [wsRes, usersRes] = await Promise.all([
+    const [wsRes, usersRes, plansRes] = await Promise.all([
       fetch('/api/admin/workspaces'),
       fetch('/api/admin/users'),
+      fetch('/api/admin/plans'),
     ])
     if (wsRes.ok) setWorkspaces(await wsRes.json())
     if (usersRes.ok) setUsers(await usersRes.json())
+    if (plansRes.ok) setPlans(await plansRes.json())
     setLoading(false)
   }, [])
 
@@ -53,11 +62,15 @@ export default function AdminWorkspacesPage() {
     const res = await fetch('/api/admin/workspaces', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify({
+        name: form.name,
+        ownerUserId: form.ownerUserId || undefined,
+        planId: form.planId || undefined,
+      }),
     })
     if (res.ok) {
       setShowCreate(false)
-      setForm({ name: '', ownerUserId: '', planName: 'free', maxAdAccounts: 1 })
+      setForm({ name: '', ownerUserId: '', planId: '' })
       await load()
     } else {
       const data = await res.json()
@@ -71,7 +84,7 @@ export default function AdminWorkspacesPage() {
     await fetch(`/api/admin/workspaces/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ planName: editing.planName, maxAdAccounts: editing.maxAdAccounts }),
+      body: JSON.stringify({ planId: editing.planId || null }),
     })
     setEditing(null)
     await load()
@@ -128,21 +141,14 @@ export default function AdminWorkspacesPage() {
             <select
               className="px-3 py-2 rounded-lg text-sm border"
               style={{ borderColor: '#1e293b', color: '#f1f5f9', backgroundColor: '#111827' }}
-              value={form.planName}
-              onChange={e => setForm(f => ({ ...f, planName: e.target.value }))}
+              value={form.planId}
+              onChange={e => setForm(f => ({ ...f, planId: e.target.value }))}
             >
-              {PLANS.map(p => <option key={p} value={p}>{p}</option>)}
+              <option value="">Plano padrão (Free)</option>
+              {plans.map(p => (
+                <option key={p.id} value={p.id}>{p.name} · {p.maxAdAccounts} contas</option>
+              ))}
             </select>
-            <input
-              type="number"
-              min={1}
-              max={50}
-              className="px-3 py-2 rounded-lg text-sm border bg-transparent"
-              style={{ borderColor: '#1e293b', color: '#f1f5f9' }}
-              placeholder="Máx. contas de anúncio"
-              value={form.maxAdAccounts}
-              onChange={e => setForm(f => ({ ...f, maxAdAccounts: Number(e.target.value) }))}
-            />
             <div className="col-span-2 flex gap-2 justify-end">
               <button
                 type="button"
@@ -184,26 +190,20 @@ export default function AdminWorkspacesPage() {
                       <select
                         className="text-xs px-2 py-1 rounded border"
                         style={{ borderColor: '#1e293b', color: '#f1f5f9', backgroundColor: '#0f172a' }}
-                        value={editing.planName}
-                        onChange={e => setEditing(p => p && ({ ...p, planName: e.target.value }))}
+                        value={editing.planId}
+                        onChange={e => setEditing(p => p && ({ ...p, planId: e.target.value }))}
                       >
-                        {PLANS.map(p => <option key={p} value={p}>{p}</option>)}
+                        <option value="">Sem plano</option>
+                        {plans.map(p => (
+                          <option key={p.id} value={p.id}>{p.name} · {p.maxAdAccounts} contas</option>
+                        ))}
                       </select>
-                      <input
-                        type="number"
-                        min={1}
-                        max={50}
-                        className="text-xs px-2 py-1 rounded border w-14"
-                        style={{ borderColor: '#1e293b', color: '#f1f5f9', backgroundColor: '#0f172a' }}
-                        value={editing.maxAdAccounts}
-                        onChange={e => setEditing(p => p && ({ ...p, maxAdAccounts: Number(e.target.value) }))}
-                      />
                       <button onClick={() => savePlan(ws.id)}><Check className="w-3.5 h-3.5" style={{ color: '#10b981' }} /></button>
                       <button onClick={() => setEditing(null)}><X className="w-3.5 h-3.5" style={{ color: '#ef4444' }} /></button>
                     </div>
                   ) : (
                     <button
-                      onClick={() => setEditing({ id: ws.id, planName: ws.planName, maxAdAccounts: ws.maxAdAccounts })}
+                      onClick={() => setEditing({ id: ws.id, planId: ws.planId || '' })}
                       className="flex items-center gap-1.5 text-xs px-2 py-0.5 rounded hover:opacity-80"
                       style={{ backgroundColor: '#1e293b', color: '#94a3b8' }}
                     >

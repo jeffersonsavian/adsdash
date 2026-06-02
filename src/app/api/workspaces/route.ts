@@ -34,12 +34,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Only owners can create workspaces
+  // Owners and superadmins can create workspaces
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
   })
 
-  if (user?.role !== 'owner') {
+  if (user?.role !== 'owner' && user?.role !== 'superadmin') {
     return NextResponse.json(
       { error: 'Only owners can create workspaces' },
       { status: 403 }
@@ -56,6 +56,9 @@ export async function POST(request: Request) {
     )
   }
 
+  // Plano padrão (Free) — denormaliza nome/limite no workspace
+  const freePlan = await prisma.plan.findUnique({ where: { slug: 'free' } })
+
   try {
     const workspace = await prisma.workspace.create({
       data: {
@@ -63,6 +66,9 @@ export async function POST(request: Request) {
         slug,
         timezone: 'America/Sao_Paulo',
         currency: 'BRL',
+        planId: freePlan?.id ?? null,
+        planName: freePlan?.name ?? 'Free',
+        maxAdAccounts: freePlan?.maxAdAccounts ?? 1,
       },
     })
 

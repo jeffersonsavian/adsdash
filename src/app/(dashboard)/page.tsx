@@ -51,7 +51,7 @@ export default async function DashboardPage() {
 
   // For owners: get consolidated metrics across all workspaces
   const userRole = (session.user as any).role || 'client'
-  const isOwner = userRole === 'owner'
+  const isOwner = userRole === 'owner' || userRole === 'superadmin'
 
   let consolidatedMetrics: any = null
   if (isOwner) {

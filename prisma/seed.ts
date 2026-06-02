@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { hash } from 'bcryptjs'
 import { randomBytes } from 'crypto'
+import { seedPlans } from './_plans'
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }),
@@ -22,6 +23,10 @@ async function main() {
   await prisma.workspaceUser.deleteMany()
   await prisma.workspace.deleteMany()
   await prisma.user.deleteMany()
+
+  // Seed default plans
+  await seedPlans(prisma)
+  const proPlan = await prisma.plan.findUnique({ where: { slug: 'pro' } })
 
   // Create default owner user
   const ownerUser = await prisma.user.create({
@@ -52,7 +57,8 @@ async function main() {
       slug: 'coach-jack',
       timezone: 'America/Sao_Paulo',
       currency: 'BRL',
-      planName: 'pro',
+      planId: proPlan?.id,
+      planName: 'Pro',
       maxAdAccounts: 5,
     },
   })

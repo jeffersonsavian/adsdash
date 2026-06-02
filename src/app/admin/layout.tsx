@@ -35,6 +35,13 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         <div className="px-4 py-4 border-t" style={{ borderColor: '#1e293b' }}>
           <p className="text-xs truncate mb-1" style={{ color: '#475569' }}>{session.user?.email}</p>
           <p className="text-[10px] mb-3" style={{ color: '#8b5cf6' }}>superadmin</p>
+          <Link
+            href="/account"
+            className="block w-full py-1.5 px-3 mb-2 text-xs rounded-lg border transition-colors hover:opacity-80 text-left"
+            style={{ borderColor: '#1e293b', backgroundColor: '#111827', color: '#94a3b8' }}
+          >
+            Minha Conta
+          </Link>
           <form
             action={async () => {
               'use server'

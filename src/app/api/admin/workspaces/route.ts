@@ -44,10 +44,21 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { name, ownerUserId, planName = 'free', maxAdAccounts = 1, timezone = 'America/Sao_Paulo', currency = 'BRL' } = body
+  const { name, ownerUserId, planId, timezone = 'America/Sao_Paulo', currency = 'BRL' } = body
+  let { planName = 'free', maxAdAccounts = 1 } = body
 
   if (!name) {
     return NextResponse.json({ error: 'name é obrigatório' }, { status: 400 })
+  }
+
+  // Se um plano for informado, deriva nome/limite a partir dele
+  if (planId) {
+    const plan = await prisma.plan.findUnique({ where: { id: planId } })
+    if (!plan) {
+      return NextResponse.json({ error: 'Plano não encontrado' }, { status: 400 })
+    }
+    planName = plan.name
+    maxAdAccounts = plan.maxAdAccounts
   }
 
   const baseSlug = slugify(name)
@@ -63,6 +74,7 @@ export async function POST(request: NextRequest) {
       slug,
       timezone,
       currency,
+      planId: planId || null,
       planName,
       maxAdAccounts,
       ...(ownerUserId && {

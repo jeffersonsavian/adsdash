@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { getWorkspaceOrFail } from '@/lib/workspace'
 import { decrypt } from '@/lib/crypto'
 import { getRedis } from '@/lib/redis'
+import { publicUrl } from '@/lib/url'
 import { createHmac, randomBytes } from 'crypto'
 
 const OAUTH_STATE_TTL = 600 // 10 min
@@ -11,7 +12,7 @@ const OAUTH_STATE_TTL = 600 // 10 min
 export async function GET(request: NextRequest) {
   const session = await auth()
   if (!session?.user?.id) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    return NextResponse.redirect(publicUrl('/login', request))
   }
 
   const slug = request.nextUrl.searchParams.get('workspace')
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
   const workspace = await getWorkspaceOrFail(slug, session.user.id)
 
   if (!workspace.metaAppId || !workspace.metaAppSecret) {
-    const settingsUrl = new URL(`/${slug}/settings`, request.url)
+    const settingsUrl = new URL(publicUrl(`/${slug}/settings`, request))
     settingsUrl.searchParams.set('error', 'meta-app-not-configured')
     return NextResponse.redirect(settingsUrl)
   }
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
     slug,
   }))
 
-  const callbackUrl = new URL('/api/oauth/meta/callback', request.url).toString()
+  const callbackUrl = publicUrl('/api/oauth/meta/callback', request)
 
   const oauthUrl = new URL('https://www.facebook.com/dialog/oauth')
   oauthUrl.searchParams.set('client_id', workspace.metaAppId)

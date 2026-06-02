@@ -1,81 +1,100 @@
-# docker/docker-compose.yml — AdsDash Stack for Docker Swarm
-# Deploy: docker stack deploy --with-registry-auth -c docker-compose.yml adsdash
-#
-# As variáveis de ambiente são lidas do arquivo /opt/adsdash/.env no servidor.
-# Nunca commitar o .env com valores reais.
-
-version: '3.8'
+version: "3.7"
 
 services:
   app:
     image: ghcr.io/jeffersonsavian/adsdash-app:latest
-    env_file:
-      - /opt/adsdash/.env
-    environment:
-      NODE_ENV: production
-      NEXTAUTH_URL: "https://adsdash.decisaobuilder.com.br"
+
     networks:
-      - traefik-public
-      - internal
+      - network_swarm_public
+
+    environment:
+      # --- Database ---
+      - DATABASE_URL=postgresql://adsdash_user:EgX7iviFUaUlYl1LnxvKofKgE4cu459lqr@postgres:5432/adsdash?schema=public
+
+      # --- Redis ---
+      - REDIS_URL=redis://redis:6379
+
+      # --- App ---
+      - NODE_ENV=production
+      - NEXTAUTH_URL=https://adsdash.decisaobuilder.com.br
+      - AUTH_TRUST_HOST=true
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      - TZ=America/Sao_Paulo
+
+      # Gerar com: openssl rand -base64 32
+      - NEXTAUTH_SECRET=CkejqXAQaEH/A09xhG4HqksFqp8vP1TqT67PvmbmtzY=
+      - ENCRYPTION_KEY=2zrvFcfVSFQGf7PlXmXT5LzyYZziuPDJyHSWMwZN9RQ=
+      - API_SECRET_TOKEN=LPgPWDHtE2uMgmqWU6bvAz9iJAHn4bablNF4sGyod/4=
+
+      # --- Meta / OAuth ---
+      - META_APP_ID=
+      - META_APP_SECRET=
+
     deploy:
+      mode: replicated
       replicas: 1
-      update_config:
-        parallelism: 1
+      placement:
+        constraints:
+          - node.hostname == worker01
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1024M
+      restart_policy:
+        condition: on-failure
         delay: 10s
-        order: start-first
-      rollback_config:
-        parallelism: 1
-        delay: 0s
+        max_attempts: 3
+
       labels:
-        - "traefik.enable=true"
-        - "traefik.http.routers.adsdash.rule=Host(`adsdash.decisaobuilder.com.br`)"
-        - "traefik.http.routers.adsdash.entrypoints=websecure"
-        - "traefik.http.routers.adsdash.tls.certresolver=letsencrypt"
-        - "traefik.http.services.adsdash.loadbalancer.server.port=3000"
-        - "traefik.http.routers.adsdash.middlewares=adsdash-headers"
-        - "traefik.http.middlewares.adsdash-headers.headers.customresponseheaders.X-Frame-Options=SAMEORIGIN"
-        - "traefik.http.middlewares.adsdash-headers.headers.customresponseheaders.X-Content-Type-Options=nosniff"
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
+        - traefik.enable=true
+
+        # HTTP → HTTPS redirect
+        - traefik.http.routers.adsdash_http.rule=Host(`adsdash.decisaobuilder.com.br`)
+        - traefik.http.routers.adsdash_http.entrypoints=web
+        - traefik.http.routers.adsdash_http.middlewares=adsdash_redirect
+        - traefik.http.middlewares.adsdash_redirect.redirectscheme.scheme=https
+
+        # HTTPS router
+        - traefik.http.routers.adsdash.rule=Host(`adsdash.decisaobuilder.com.br`)
+        - traefik.http.routers.adsdash.entrypoints=websecure
+        - traefik.http.routers.adsdash.service=adsdash
+        - traefik.http.routers.adsdash.tls.certresolver=letsencryptresolver
+
+        # Service (Next.js standalone porta 3000)
+        - traefik.http.services.adsdash.loadbalancer.server.port=3000
 
   worker:
     image: ghcr.io/jeffersonsavian/adsdash-worker:latest
-    env_file:
-      - /opt/adsdash/.env
-    environment:
-      NODE_ENV: production
-    networks:
-      - internal
-    deploy:
-      replicas: 1
-      update_config:
-        parallelism: 1
-        delay: 5s
 
-  scheduler:
-    image: ghcr.io/jeffersonsavian/adsdash-worker:latest
-    env_file:
-      - /opt/adsdash/.env
-    environment:
-      NODE_ENV: production
-    command: >
-      sh -c "while true; do
-        echo '[Scheduler] Running at '$(date) &&
-        pnpm scheduler &&
-        echo '[Scheduler] Done, sleeping 3600s' &&
-        sleep 3600;
-      done"
     networks:
-      - internal
+      - network_swarm_public
+
+    environment:
+      - DATABASE_URL=postgresql://adsdash_user:EgX7iviFUaUlYl1LnxvKofKgE4cu459lqr@postgres:5432/adsdash?schema=public
+      - REDIS_URL=redis://redis:6379
+      - NODE_ENV=production
+      - TZ=America/Sao_Paulo
+      - NEXTAUTH_SECRET=CkejqXAQaEH/A09xhG4HqksFqp8vP1TqT67PvmbmtzY=
+      - ENCRYPTION_KEY=2zrvFcfVSFQGf7PlXmXT5LzyYZziuPDJyHSWMwZN9RQ
+      - META_APP_ID=
+      - META_APP_SECRET=
+
     deploy:
+      mode: replicated
       replicas: 1
+      placement:
+        constraints:
+          - node.hostname == worker01
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
 
 networks:
-  traefik-public:
+  network_swarm_public:
     external: true
-  internal:
-    driver: overlay

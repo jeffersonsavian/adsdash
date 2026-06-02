@@ -16,11 +16,13 @@ model Workspace {
   cpaAlertThreshold   Decimal? @db.Decimal(10, 2)
   metaAppId           String?
   metaAppSecret       String?  // AES-256-GCM encrypted
-  planName            String   @default("free")
-  maxAdAccounts       Int      @default(1)
+  planId              String?
+  planName            String   @default("free") // denormalizado a partir de Plan.name
+  maxAdAccounts       Int      @default(1)       // denormalizado a partir de Plan.maxAdAccounts
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
+  plan         Plan?           @relation(fields: [planId], references: [id])
   users        WorkspaceUser[]
   adAccounts   AdAccount[]
   campaigns    Campaign[]
@@ -33,6 +35,22 @@ model Workspace {
   sales        Sale[]
 
   @@map("workspaces")
+}
+
+model Plan {
+  id            String   @id @default(uuid())
+  name          String
+  slug          String   @unique
+  description   String?
+  maxAdAccounts Int      @default(1)
+  price         Decimal? @db.Decimal(10, 2)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workspaces Workspace[]
+
+  @@map("plans")
 }
 
 model User {
