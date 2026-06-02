@@ -6,10 +6,11 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { DateRangePicker } from '@/components/DateRangePicker'
+import { ConversionFunnel } from '@/components/ConversionFunnel'
 import { periodPresets } from '@/lib/metrics'
 import {
   DollarSign, TrendingUp, Users, BarChart2,
-  Zap, ChevronUp, ChevronDown, ArrowRight,
+  ChevronUp, ChevronDown, ArrowRight,
   MousePointer, Eye, ShoppingCart, Percent,
   CreditCard, Package, AlertCircle,
 } from 'lucide-react'
@@ -168,10 +169,10 @@ export default function WorkspaceDashboardPage() {
 
   const funnelSteps = [
     { label: 'Impressões', value: Number(curr?.impressions ?? 0), color: '#3b82f6' },
-    { label: 'Cliques',    value: Number(curr?.clicks ?? 0),      color: '#8b5cf6' },
-    { label: 'Leads',      value: Number(curr?.leads ?? 0),        color: '#10b981' },
+    { label: 'Cliques',    value: Number(curr?.clicks ?? 0),      color: '#6366f1' },
+    { label: 'Leads',      value: Number(curr?.leads ?? 0),        color: '#8b5cf6' },
+    { label: 'Compras',    value: Number(curr?.purchases ?? 0),   color: '#ec4899' },
   ]
-  const funnelMax = funnelSteps[0].value || 1
 
   const chartData = (data?.daily ?? []).map(row => ({
     date: new Date(row.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
@@ -187,7 +188,7 @@ export default function WorkspaceDashboardPage() {
         <div>
           <h1 className="text-xl font-bold">Dashboard</h1>
           <p className="text-sm mt-0.5" style={{ color: '#64748b' }}>
-            {dateStart} → {dateEnd}
+            {new Date(dateStart + 'T12:00:00').toLocaleDateString('pt-BR')} → {new Date(dateEnd + 'T12:00:00').toLocaleDateString('pt-BR')}
           </p>
         </div>
         <DateRangePicker
@@ -269,59 +270,29 @@ export default function WorkspaceDashboardPage() {
           </div>
         </div>
 
-        {/* ── Row 2: Funil + Métricas + Integração ── */}
+        {/* ── Row 2: Funil + Métricas ── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-          {/* Funil */}
-          <div className="rounded-xl border p-5" style={{ backgroundColor: '#111827', borderColor: '#1e293b' }}>
-            <p className="text-xs font-medium tracking-widest uppercase mb-5" style={{ color: '#64748b' }}>Funil de Conversão</p>
+          {/* Funil — 2 colunas */}
+          <div className="lg:col-span-2 rounded-xl border p-5" style={{ backgroundColor: '#111827', borderColor: '#1e293b' }}>
+            <p className="text-xs font-medium tracking-widest uppercase mb-5" style={{ color: '#64748b' }}>Funil de Conversão (Meta Ads)</p>
             {loading ? (
-              <div className="space-y-3 animate-pulse">
-                {[100, 65, 30].map((w, i) => (
-                  <div key={i} className="rounded-lg h-10" style={{ width: `${w}%`, backgroundColor: '#1e293b' }} />
+              <div className="flex gap-4 items-end animate-pulse" style={{ height: 170 }}>
+                {[1, 0.75, 0.35, 0.18].map((ratio, i) => (
+                  <div key={i} className="flex-1 rounded" style={{ height: `${ratio * 100}%`, backgroundColor: '#1e293b' }} />
                 ))}
               </div>
             ) : (
-              <div className="space-y-3">
-                {funnelSteps.map((step, i) => {
-                  const pct = (step.value / funnelMax) * 100
-                  const conv = i > 0 && funnelSteps[i - 1].value > 0
-                    ? (step.value / funnelSteps[i - 1].value) * 100 : null
-                  return (
-                    <div key={step.label}>
-                      <div className="flex justify-between text-xs mb-1.5">
-                        <span style={{ color: '#94a3b8' }}>{step.label}</span>
-                        <span className="tabular-nums font-medium">
-                          {Num(step.value)}
-                          {conv !== null && (
-                            <span className="ml-1.5" style={{ color: '#475569' }}>({Pct(conv)})</span>
-                          )}
-                        </span>
-                      </div>
-                      <div className="h-6 rounded-md overflow-hidden" style={{ backgroundColor: '#1e293b' }}>
-                        <div
-                          className="h-full rounded-md"
-                          style={{
-                            width: `${Math.max(pct, 3)}%`,
-                            backgroundColor: `${step.color}28`,
-                            borderLeft: `3px solid ${step.color}`,
-                            transition: 'width 0.6s ease',
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
+              <ConversionFunnel steps={funnelSteps} />
             )}
           </div>
 
-          {/* Métricas */}
+          {/* Métricas — 1 coluna */}
           <div className="rounded-xl border p-5" style={{ backgroundColor: '#111827', borderColor: '#1e293b' }}>
             <p className="text-xs font-medium tracking-widest uppercase mb-5" style={{ color: '#64748b' }}>Métricas</p>
             {loading ? (
               <div className="space-y-4 animate-pulse">
-                {Array.from({ length: 5 }).map((_, i) => (
+                {Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="flex justify-between">
                     <div className="h-3 w-16 rounded" style={{ backgroundColor: '#1e293b' }} />
                     <div className="h-3 w-20 rounded" style={{ backgroundColor: '#1e293b' }} />
@@ -331,11 +302,12 @@ export default function WorkspaceDashboardPage() {
             ) : (
               <div className="divide-y" style={{ borderColor: '#1e293b' }}>
                 {[
-                  { label: 'CPL', value: R$(cpl), icon: Users },
-                  { label: 'CTR', value: Pct(ctr), icon: MousePointer },
-                  { label: 'Impressões', value: Num(curr?.impressions), icon: Eye },
-                  { label: 'Cliques', value: Num(curr?.clicks), icon: MousePointer },
-                  { label: 'Compras', value: Num(curr?.purchases), icon: DollarSign },
+                  { label: 'CPL',        value: R$(cpl),                  icon: Users },
+                  { label: 'CTR',        value: Pct(ctr),                 icon: MousePointer },
+                  { label: 'Impressões', value: Num(curr?.impressions),   icon: Eye },
+                  { label: 'Cliques',    value: Num(curr?.clicks),        icon: MousePointer },
+                  { label: 'Leads',      value: Num(curr?.leads),         icon: Users },
+                  { label: 'Compras',    value: Num(curr?.purchases),     icon: ShoppingCart },
                 ].map(({ label, value, icon: Icon }) => (
                   <div key={label} className="flex items-center justify-between py-2.5">
                     <div className="flex items-center gap-2">
@@ -347,26 +319,6 @@ export default function WorkspaceDashboardPage() {
                 ))}
               </div>
             )}
-          </div>
-
-          {/* Placeholder integração */}
-          <div
-            className="rounded-xl border-2 border-dashed p-5 flex flex-col items-center justify-center text-center"
-            style={{ backgroundColor: '#111827', borderColor: '#1e293b' }}
-          >
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ backgroundColor: '#1e293b' }}>
-              <Zap className="w-6 h-6" style={{ color: '#475569' }} />
-            </div>
-            <p className="font-semibold text-sm mb-1">Taxa de Aprovação</p>
-            <p className="text-xs leading-relaxed mb-5" style={{ color: '#64748b' }}>
-              Conecte Hotmart ou Kiwify para cruzar dados de vendas com UTMs da Meta
-            </p>
-            <button
-              className="px-4 py-2 text-xs font-medium rounded-lg border transition-colors hover:opacity-80"
-              style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#94a3b8' }}
-            >
-              + Integrar plataforma
-            </button>
           </div>
         </div>
 

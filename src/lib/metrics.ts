@@ -6,9 +6,13 @@ import { subDays, startOfMonth, endOfMonth, format } from 'date-fns'
 export const periodPresets = {
   today: () => {
     const now = new Date()
-    const start = format(now, 'yyyy-MM-dd')
-    const end = format(now, 'yyyy-MM-dd')
-    return { start, end, label: 'Today', key: 'today' }
+    const d = format(now, 'yyyy-MM-dd')
+    return { start: d, end: d, label: 'Hoje', key: 'today' }
+  },
+  yesterday: () => {
+    const y = subDays(new Date(), 1)
+    const d = format(y, 'yyyy-MM-dd')
+    return { start: d, end: d, label: 'Ontem', key: 'yesterday' }
   },
   last7Days: () => {
     const end = new Date()
@@ -16,8 +20,18 @@ export const periodPresets = {
     return {
       start: format(start, 'yyyy-MM-dd'),
       end: format(end, 'yyyy-MM-dd'),
-      label: 'Last 7 days',
+      label: 'Últimos 7 dias',
       key: 'last7days',
+    }
+  },
+  last14Days: () => {
+    const end = new Date()
+    const start = subDays(end, 13)
+    return {
+      start: format(start, 'yyyy-MM-dd'),
+      end: format(end, 'yyyy-MM-dd'),
+      label: 'Últimos 14 dias',
+      key: 'last14days',
     }
   },
   last30Days: () => {
@@ -26,19 +40,27 @@ export const periodPresets = {
     return {
       start: format(start, 'yyyy-MM-dd'),
       end: format(end, 'yyyy-MM-dd'),
-      label: 'Last 30 days',
+      label: 'Últimos 30 dias',
       key: 'last30days',
     }
   },
   currentMonth: () => {
     const now = new Date()
-    const start = startOfMonth(now)
-    const end = endOfMonth(now)
     return {
-      start: format(start, 'yyyy-MM-dd'),
-      end: format(end, 'yyyy-MM-dd'),
-      label: 'Current month',
+      start: format(startOfMonth(now), 'yyyy-MM-dd'),
+      end: format(endOfMonth(now), 'yyyy-MM-dd'),
+      label: 'Este mês',
       key: 'currentmonth',
+    }
+  },
+  lastMonth: () => {
+    const firstOfThisMonth = startOfMonth(new Date())
+    const lastOfPrevMonth = subDays(firstOfThisMonth, 1)
+    return {
+      start: format(startOfMonth(lastOfPrevMonth), 'yyyy-MM-dd'),
+      end: format(lastOfPrevMonth, 'yyyy-MM-dd'),
+      label: 'Mês passado',
+      key: 'lastmonth',
     }
   },
 }
