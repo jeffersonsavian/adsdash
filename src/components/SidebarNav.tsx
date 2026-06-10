@@ -2,7 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Megaphone, FileText, Settings, Plug, ShieldCheck } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { LayoutDashboard, Megaphone, FileText, Settings, Plug, ShieldCheck, Receipt } from 'lucide-react'
 
 const navItems = [
   { label: 'Dashboard',      icon: LayoutDashboard, suffix: '' },
@@ -21,6 +22,19 @@ export function SidebarNav({ role }: SidebarNavProps) {
   const workspaceSlug = pathname.split('/')[1] ?? ''
 
   const isAdminArea = pathname.startsWith('/admin')
+
+  // Verifica se o usuário pode ver a tela de debug (superadmin global ou owner do workspace)
+  const [canDebug, setCanDebug] = useState(role === 'superadmin')
+  useEffect(() => {
+    if (role === 'superadmin') { setCanDebug(true); return }
+    if (!workspaceSlug || isAdminArea) { setCanDebug(false); return }
+    let active = true
+    fetch(`/api/${workspaceSlug}/access`)
+      .then((r) => (r.ok ? r.json() : { canDebug: false }))
+      .then((j) => { if (active) setCanDebug(!!j.canDebug) })
+      .catch(() => { if (active) setCanDebug(false) })
+    return () => { active = false }
+  }, [workspaceSlug, isAdminArea, role])
 
   if (!workspaceSlug && !isAdminArea) {
     return (
@@ -50,6 +64,24 @@ export function SidebarNav({ role }: SidebarNavProps) {
           </Link>
         )
       })}
+
+      {!isAdminArea && workspaceSlug && canDebug && (() => {
+        const href = `/${workspaceSlug}/sales`
+        const active = pathname.startsWith(href)
+        return (
+          <Link
+            href={href}
+            className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all"
+            style={{
+              backgroundColor: active ? '#1e293b' : 'transparent',
+              color: active ? '#f1f5f9' : '#64748b',
+            }}
+          >
+            <Receipt className="w-4 h-4 flex-shrink-0" style={{ color: active ? '#3b82f6' : '#475569' }} />
+            Vendas (Debug)
+          </Link>
+        )
+      })()}
 
       {role === 'superadmin' && (
         <div className="pt-2 mt-2 border-t" style={{ borderColor: '#1e293b' }}>
