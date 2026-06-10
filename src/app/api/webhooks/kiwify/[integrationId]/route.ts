@@ -65,6 +65,39 @@ export async function POST(
   const status = normalizeKiwifyStatus(order.order_status ?? '', event)
   const commissions = order.Commissions ?? {}
 
+  // Dados comuns para create e update
+  const commonData = {
+    status,
+    event,
+    grossAmount: Number(commissions.charge_amount ?? 0),
+    netAmount: Number(commissions.my_commission ?? 0),
+    platformFee: Number(commissions.kiwify_fee ?? 0),
+    currency: commissions.product_base_price_currency ?? 'BRL',
+    paymentMethod: order.payment_method ?? null,
+    installments: Number(order.installments ?? 1),
+    productId: order.Product?.product_id ?? null,
+    productName: order.Product?.product_name ?? null,
+    offerName: order.Product?.product_offer_name ?? null,
+    customerEmail: order.Customer?.email ?? null,
+    customerName: order.Customer?.full_name ?? null,
+    utmSource: tracking.utm_source ?? null,
+    utmMedium: tracking.utm_medium ?? null,
+    utmCampaign: tracking.utm_campaign ?? null,
+    utmContent: tracking.utm_content ?? null,
+    utmTerm: tracking.utm_term ?? null,
+    metaCampaignId: campaign.id,
+    metaCampaignName: campaign.name,
+    metaAdsetId: adset.id,
+    metaAdsetName: adset.name,
+    metaAdId: ad.id,
+    metaAdName: ad.name,
+    fundsStatus: commissions.funds_status ?? null,
+    approvedAt: order.approved_date ? new Date(order.approved_date) : null,
+    refundedAt: order.refunded_at ? new Date(order.refunded_at) : null,
+    saleDate: order.approved_date ? new Date(order.approved_date) : (order.created_at ? new Date(order.created_at) : new Date()),
+    rawData: body,
+  }
+
   try {
     await prisma.sale.upsert({
       where: {
@@ -73,55 +106,14 @@ export async function POST(
           externalId: order.order_id,
         },
       },
-      update: {
-        status,
-        event,
-        fundsStatus: commissions.funds_status ?? null,
-        refundedAt: order.refunded_at ? new Date(order.refunded_at) : null,
-        rawData: body,
-      },
+      update: commonData,
       create: {
         workspaceId: integration.workspaceId,
         integrationId: integration.id,
         adAccountId: integration.adAccount?.id ?? null,
         platform: 'kiwify',
         externalId: order.order_id,
-        status,
-        event,
-
-        grossAmount: Number(commissions.charge_amount ?? 0),
-        netAmount: Number(commissions.my_commission ?? 0),
-        platformFee: Number(commissions.kiwify_fee ?? 0),
-        currency: commissions.product_base_price_currency ?? 'BRL',
-
-        paymentMethod: order.payment_method ?? null,
-        installments: Number(order.installments ?? 1),
-
-        productId: order.Product?.product_id ?? null,
-        productName: order.Product?.product_name ?? null,
-        offerName: order.Product?.product_offer_name ?? null,
-
-        customerEmail: order.Customer?.email ?? null,
-        customerName: order.Customer?.full_name ?? null,
-
-        utmSource: tracking.utm_source ?? null,
-        utmMedium: tracking.utm_medium ?? null,
-        utmCampaign: tracking.utm_campaign ?? null,
-        utmContent: tracking.utm_content ?? null,
-        utmTerm: tracking.utm_term ?? null,
-
-        metaCampaignId: campaign.id,
-        metaCampaignName: campaign.name,
-        metaAdsetId: adset.id,
-        metaAdsetName: adset.name,
-        metaAdId: ad.id,
-        metaAdName: ad.name,
-
-        fundsStatus: commissions.funds_status ?? null,
-        approvedAt: order.approved_date ? new Date(order.approved_date) : null,
-        refundedAt: order.refunded_at ? new Date(order.refunded_at) : null,
-
-        rawData: body,
+        ...commonData,
       },
     })
 

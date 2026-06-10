@@ -309,6 +309,7 @@ model Sale {
   adAccountId String?  // nullable: populated via integration.adAccount on webhook
 
   rawData   Json?
+  saleDate  DateTime @default(now())  // data de negócio (aprovação/criação do pedido)
   createdAt DateTime @default(now())
 
   workspace   Workspace   @relation(fields: [workspaceId], references: [id])
@@ -318,6 +319,7 @@ model Sale {
   @@unique([platform, externalId])
   @@index([workspaceId, createdAt])
   @@index([workspaceId, status])
+  @@index([workspaceId, saleDate])
   @@index([metaCampaignId])
   @@index([metaAdsetId])
   @@map("sales")
