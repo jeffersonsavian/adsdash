@@ -55,6 +55,40 @@ export interface MetaInsightRow {
   cost_per_action_type?: MetaAction[]
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+// Códigos de rate limit / erro transitório da Graph API:
+// 4 = app rate limit, 17 = user rate limit, 32 = page rate limit,
+// 613 = custom rate limit; is_transient cobre instabilidades pontuais.
+const RETRYABLE_CODES = new Set([4, 17, 32, 613])
+const MAX_RETRIES = 3
+
+async function fetchGraphWithRetry(url: string, accessToken: string): Promise<any> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+
+    if (res.ok) return res.json()
+
+    const err: any = await res.json().catch(() => ({}))
+    const code = err.error?.code
+    const retryable =
+      RETRYABLE_CODES.has(code) || err.error?.is_transient === true || res.status >= 500
+
+    if (!retryable || attempt >= MAX_RETRIES) {
+      console.error('[Meta API] Error:', JSON.stringify(err))
+      throw new Error(`Meta API error: ${err.error?.message ?? `HTTP ${res.status}`}`)
+    }
+
+    const waitMs = 30_000 * Math.pow(2, attempt) // 30s, 60s, 120s
+    console.warn(
+      `[Meta API] Rate limit/transient (code ${code}, status ${res.status}) — retry ${attempt + 1}/${MAX_RETRIES} em ${waitMs / 1000}s`
+    )
+    await sleep(waitMs)
+  }
+}
+
 export async function fetchInsights({
   accessToken,
   accountId,
@@ -88,19 +122,7 @@ export async function fetchInsights({
 
   while (nextUrl && pageCount < maxPages) {
     pageCount++
-    const res = await fetch(nextUrl, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    })
-
-    if (!res.ok) {
-      const err: any = await res.json()
-      console.error('[Meta API] Error:', JSON.stringify(err))
-      throw new Error(`Meta API error: ${err.error?.message}`)
-    }
-
-    const data: any = await res.json()
+    const data: any = await fetchGraphWithRetry(nextUrl, accessToken)
     const rows = (data.data || []) as MetaInsightRow[]
     allRows.push(...rows)
 
