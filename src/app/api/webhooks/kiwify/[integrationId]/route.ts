@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { parseUtmPair, normalizeKiwifyStatus } from '@/lib/integrations'
 import { NextRequest, NextResponse } from 'next/server'
-import { timingSafeEqual } from 'crypto'
+import { createHmac, timingSafeEqual } from 'crypto'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,9 +11,11 @@ export async function POST(
 ) {
   const { integrationId } = await params
 
+  // Read raw body for HMAC validation
+  const rawBody = await req.text()
   let body: any
   try {
-    body = await req.json()
+    body = JSON.parse(rawBody)
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
@@ -28,17 +30,47 @@ export async function POST(
     return NextResponse.json({ error: 'Integration not found' }, { status: 404 })
   }
 
-  // Validar signature com timing-safe comparison (previne timing attacks)
-  const signature = body?.signature
+  // Validar signature: HMAC-SHA1 do corpo raw com o token como chave
+  const { searchParams } = new URL(req.url)
+  const querySignature = searchParams.get('signature')
+  const bodySignature = body?.signature
+
+  const signatureFromRequest = querySignature || bodySignature
   let signatureValid = false
-  if (signature) {
+  let useLegacyMode = false
+
+  if (signatureFromRequest) {
+    // Calculate HMAC-SHA1(rawBody, webhookToken) in hex
+    const calculatedHmac = createHmac('sha1', integration.webhookToken)
+      .update(rawBody)
+      .digest('hex')
+
     try {
       signatureValid = timingSafeEqual(
-        Buffer.from(signature, 'utf8'),
-        Buffer.from(integration.webhookToken, 'utf8')
+        Buffer.from(signatureFromRequest, 'utf8'),
+        Buffer.from(calculatedHmac, 'utf8')
       )
-    } catch { signatureValid = false }
+    } catch {
+      signatureValid = false
+    }
+
+    // Fallback: aceite a comparação legada (signature === token) para compatibilidade
+    if (!signatureValid) {
+      try {
+        signatureValid = timingSafeEqual(
+          Buffer.from(signatureFromRequest, 'utf8'),
+          Buffer.from(integration.webhookToken, 'utf8')
+        )
+        if (signatureValid) {
+          useLegacyMode = true
+          console.warn(`[Kiwify] Using legacy signature validation for integration ${integrationId}`)
+        }
+      } catch {
+        signatureValid = false
+      }
+    }
   }
+
   if (!signatureValid) {
     console.warn(`[Kiwify] Invalid signature for integration ${integrationId}`)
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
