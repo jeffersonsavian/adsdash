@@ -63,7 +63,12 @@ export async function fetchInsights({
   dateEnd: string
   level?: 'campaign' | 'adset' | 'ad'
 }): Promise<MetaInsightRow[]> {
-  const params = new URLSearchParams({
+  const allRows: MetaInsightRow[] = []
+  let nextUrl: string | null = null
+  let pageCount = 0
+  const maxPages = 50 // Teto de segurança
+
+  const baseParams = new URLSearchParams({
     access_token: accessToken,
     fields: INSIGHT_FIELDS,
     level,
@@ -72,20 +77,35 @@ export async function fetchInsights({
     limit: '500',
   })
 
-  const url = `${BASE_URL}/act_${accountId}/insights?${params}`
+  const initialUrl = `${BASE_URL}/act_${accountId}/insights?${baseParams}`
   console.log(`[Meta API] GET ${level} insights: act_${accountId} ${dateStart}→${dateEnd}`)
 
-  const res = await fetch(url)
+  nextUrl = initialUrl
 
-  if (!res.ok) {
-    const err = await res.json()
-    console.error('[Meta API] Error:', JSON.stringify(err))
-    throw new Error(`Meta API error: ${err.error?.message}`)
+  while (nextUrl && pageCount < maxPages) {
+    pageCount++
+    const res = await fetch(nextUrl)
+
+    if (!res.ok) {
+      const err: any = await res.json()
+      console.error('[Meta API] Error:', JSON.stringify(err))
+      throw new Error(`Meta API error: ${err.error?.message}`)
+    }
+
+    const data: any = await res.json()
+    const rows = (data.data || []) as MetaInsightRow[]
+    allRows.push(...rows)
+
+    console.log(`[Meta API] ${level} page ${pageCount}: ${rows.length} rows (total: ${allRows.length})`)
+
+    // Seguir próxima página se existir
+    nextUrl = data.paging?.next || null
   }
 
-  const data = await res.json()
-  console.log(`[Meta API] ${level}: ${(data.data || []).length} rows returned`)
-  return (data.data || []) as MetaInsightRow[]
+  console.log(
+    `[Meta API] ${level}: ${allRows.length} rows from ${pageCount} page(s)`
+  )
+  return allRows
 }
 
 // Extrai valor de uma action específica (ex: 'lead', 'purchase')
