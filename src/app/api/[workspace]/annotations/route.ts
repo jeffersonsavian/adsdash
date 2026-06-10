@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { getWorkspaceOrFail } from '@/lib/workspace'
-import { NextResponse } from 'next/server'
+import { getWorkspaceOrFail, getWorkspaceWithRoleOrFail } from '@/lib/workspace'
+import { NextResponse, NextRequest } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,7 +48,7 @@ export async function GET(
 }
 
 export async function POST(
-  req: Request,
+  req: NextRequest,
   { params: paramsPromise }: { params: Promise<{ workspace: string }> }
 ) {
   try {
@@ -58,7 +58,15 @@ export async function POST(
     }
 
     const { workspace } = await paramsPromise
-    const workspaceRecord = await getWorkspaceOrFail(workspace, session.user.id)
+    let workspaceRecord
+    try {
+      workspaceRecord = await getWorkspaceWithRoleOrFail(workspace, session.user.id, ['owner', 'manager'])
+    } catch (err: any) {
+      return NextResponse.json(
+        { error: err.code === 'INSUFFICIENT_ROLE' ? 'Acesso negado' : err.message },
+        { status: err.code === 'INSUFFICIENT_ROLE' ? 403 : 500 }
+      )
+    }
 
     const body = await req.json()
     const { date, title, description, type } = body

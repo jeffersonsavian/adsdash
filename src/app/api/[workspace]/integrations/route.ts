@@ -1,6 +1,6 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { getWorkspaceOrFail } from '@/lib/workspace'
+import { getWorkspaceOrFail, getWorkspaceWithRoleOrFail } from '@/lib/workspace'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -38,7 +38,16 @@ export async function POST(
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const { workspace } = await p
-    const ws = await getWorkspaceOrFail(workspace, session.user.id)
+
+    let ws
+    try {
+      ws = await getWorkspaceWithRoleOrFail(workspace, session.user.id, ['owner', 'manager'])
+    } catch (err: any) {
+      return NextResponse.json(
+        { error: err.code === 'INSUFFICIENT_ROLE' ? 'Acesso negado' : err.message },
+        { status: err.code === 'INSUFFICIENT_ROLE' ? 403 : 500 }
+      )
+    }
 
     const body = await req.json()
     const { platform, webhookToken, name } = body

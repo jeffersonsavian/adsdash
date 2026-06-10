@@ -1,5 +1,5 @@
 import { auth } from '@/lib/auth'
-import { getWorkspaceOrFail } from '@/lib/workspace'
+import { getWorkspaceOrFail, getWorkspaceWithRoleOrFail } from '@/lib/workspace'
 import { prisma } from '@/lib/prisma'
 import { enqueueSyncJob } from '@/lib/queue'
 import { NextRequest, NextResponse } from 'next/server'
@@ -18,7 +18,15 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const workspace = await getWorkspaceOrFail(workspaceSlug, session.user.id)
+    let workspace
+    try {
+      workspace = await getWorkspaceWithRoleOrFail(workspaceSlug, session.user.id, ['owner', 'manager'])
+    } catch (err: any) {
+      return NextResponse.json(
+        { error: err.code === 'INSUFFICIENT_ROLE' ? 'Acesso negado' : err.message },
+        { status: err.code === 'INSUFFICIENT_ROLE' ? 403 : 500 }
+      )
+    }
 
     const account = await prisma.adAccount.findFirst({
       where: { id, workspaceId: workspace.id },
