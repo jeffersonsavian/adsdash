@@ -1,7 +1,9 @@
 import { prisma } from '@/lib/prisma'
 import { decrypt, encrypt } from '@/lib/crypto'
+import { getMetaGraphVersion } from '@/lib/meta-api'
 
-const GRAPH = 'https://graph.facebook.com/v19.0'
+const GRAPH_VERSION = process.env.META_GRAPH_VERSION || getMetaGraphVersion()
+const GRAPH = `https://graph.facebook.com/${GRAPH_VERSION}`
 
 export async function refreshMetaToken(adAccountId: string): Promise<{ success: boolean; message: string }> {
   const adAccount = await prisma.adAccount.findUniqueOrThrow({

@@ -1,4 +1,9 @@
-const BASE_URL = 'https://graph.facebook.com/v19.0'
+const GRAPH_VERSION = process.env.META_GRAPH_VERSION || 'v19.0'
+const BASE_URL = `https://graph.facebook.com/${GRAPH_VERSION}`
+
+export function getMetaGraphVersion(): string {
+  return GRAPH_VERSION
+}
 
 const INSIGHT_FIELDS = [
   'campaign_id',
@@ -69,7 +74,6 @@ export async function fetchInsights({
   const maxPages = 50 // Teto de segurança
 
   const baseParams = new URLSearchParams({
-    access_token: accessToken,
     fields: INSIGHT_FIELDS,
     level,
     time_range: JSON.stringify({ since: dateStart, until: dateEnd }),
@@ -84,7 +88,11 @@ export async function fetchInsights({
 
   while (nextUrl && pageCount < maxPages) {
     pageCount++
-    const res = await fetch(nextUrl)
+    const res = await fetch(nextUrl, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
 
     if (!res.ok) {
       const err: any = await res.json()

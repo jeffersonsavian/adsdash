@@ -4,8 +4,10 @@ import { prisma } from '@/lib/prisma'
 import { decrypt, encrypt } from '@/lib/crypto'
 import { getRedis } from '@/lib/redis'
 import { publicUrl } from '@/lib/url'
+import { getMetaGraphVersion } from '@/lib/meta-api'
 
-const GRAPH = 'https://graph.facebook.com/v19.0'
+const GRAPH_VERSION = process.env.META_GRAPH_VERSION || getMetaGraphVersion()
+const GRAPH = `https://graph.facebook.com/${GRAPH_VERSION}`
 
 export async function GET(request: NextRequest) {
   const session = await auth()
@@ -97,7 +99,12 @@ export async function GET(request: NextRequest) {
 
   // Fetch available ad accounts
   const accountsRes = await fetch(
-    `${GRAPH}/me/adaccounts?fields=id,name,account_status&access_token=${longToken}&limit=50`
+    `${GRAPH}/me/adaccounts?fields=id,name,account_status&limit=50`,
+    {
+      headers: {
+        Authorization: `Bearer ${longToken}`,
+      },
+    }
   )
 
   const accountsData = await accountsRes.json()
