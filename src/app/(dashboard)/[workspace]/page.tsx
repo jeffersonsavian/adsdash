@@ -181,7 +181,11 @@ export default function WorkspaceDashboardPage() {
     { label: 'Impressões', value: Number(curr?.impressions ?? 0), color: '#3b82f6' },
     { label: 'Cliques',    value: Number(curr?.clicks ?? 0),      color: '#6366f1' },
     { label: 'Leads',      value: Number(curr?.leads ?? 0),        color: '#8b5cf6' },
-    { label: 'Compras',    value: Number(curr?.purchases ?? 0),   color: '#ec4899' },
+    { label: 'Compras (Meta)', value: Number(curr?.purchases ?? 0), color: '#a855f7' },
+    // Etapa de vendas reais só quando há integração com dados
+    ...(curr?.salesKpis && curr.salesKpis.salesCount > 0
+      ? [{ label: 'Vendas', value: curr.salesKpis.salesCount, color: '#ec4899' }]
+      : []),
   ]
 
   const chartData = (data?.daily ?? []).map(row => ({
@@ -264,11 +268,11 @@ export default function WorkspaceDashboardPage() {
 
           {/* Funil — 2 colunas */}
           <div className="lg:col-span-2 rounded-xl border p-5" style={{ backgroundColor: '#111827', borderColor: '#1e293b' }}>
-            <p className="text-xs font-medium tracking-widest uppercase mb-5" style={{ color: '#64748b' }}>Funil de Conversão (Meta Ads)</p>
+            <p className="text-xs font-medium tracking-widest uppercase mb-5" style={{ color: '#64748b' }}>Funil de Conversão</p>
             {loading ? (
-              <div className="flex gap-4 items-end animate-pulse" style={{ height: 170 }}>
-                {[1, 0.75, 0.35, 0.18].map((ratio, i) => (
-                  <div key={i} className="flex-1 rounded" style={{ height: `${ratio * 100}%`, backgroundColor: '#1e293b' }} />
+              <div className="flex flex-col items-center gap-3 animate-pulse" style={{ height: 280 }}>
+                {[1, 0.7, 0.45, 0.28].map((ratio, i) => (
+                  <div key={i} className="rounded-lg" style={{ width: `${ratio * 100}%`, height: 40, backgroundColor: '#1e293b' }} />
                 ))}
               </div>
             ) : (

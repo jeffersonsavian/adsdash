@@ -1,5 +1,7 @@
 'use client'
 
+import { ArrowDown } from 'lucide-react'
+
 interface FunnelStep {
   label: string
   value: number
@@ -13,122 +15,79 @@ interface ConversionFunnelProps {
 const Num = (n: number) =>
   new Intl.NumberFormat('pt-BR').format(Math.round(n))
 
-const STAGE_W = 80
-const GAP = 22
-const FUNNEL_H = 140
-const MIN_RATIO = 0.06
-const CENTER_Y = FUNNEL_H / 2
+const Pct = (n: number) =>
+  new Intl.NumberFormat('pt-BR', { maximumFractionDigits: n >= 10 ? 1 : 2 }).format(n)
+
+// Largura visual em escala sqrt: mantém etapas pequenas legíveis mesmo com
+// impressões ordens de magnitude acima de compras (escala linear colapsa tudo).
+const MIN_W = 22 // %
+const MAX_W = 100 // %
 
 export function ConversionFunnel({ steps }: ConversionFunnelProps) {
   if (!steps.length) return null
 
-  const maxVal = steps[0].value || 1
-  const N = steps.length
-  const totalW = N * STAGE_W + (N - 1) * GAP
-  const SVG_W = totalW + 80
-  const PAD = (SVG_W - totalW) / 2
+  const maxVal = Math.max(steps[0].value, 1)
 
   const bars = steps.map((step, i) => {
-    const ratio = Math.max(step.value / maxVal, MIN_RATIO)
-    const h = ratio * FUNNEL_H
-    const x = PAD + i * (STAGE_W + GAP)
-    const yTop = CENTER_Y - h / 2
-    const yBot = CENTER_Y + h / 2
-    const pct = (step.value / maxVal) * 100
-    return { ...step, x, yTop, yBot, h, pct }
+    const ratio = Math.sqrt(Math.max(step.value, 0) / maxVal)
+    const width = step.value > 0 ? Math.max(ratio * MAX_W, MIN_W) : MIN_W
+    // Taxa de conversão da etapa anterior para esta
+    const prevValue = i > 0 ? steps[i - 1].value : null
+    const stepRate =
+      prevValue && prevValue > 0 ? (step.value / prevValue) * 100 : null
+    // % acumulado vs topo do funil
+    const totalRate = maxVal > 0 ? (step.value / maxVal) * 100 : 0
+    return { ...step, width, stepRate, totalRate }
   })
 
   return (
-    <div className="w-full">
-      {/* Stage labels */}
-      <div className="flex" style={{ paddingLeft: PAD, gap: GAP }}>
-        {bars.map(bar => (
-          <div
-            key={bar.label}
-            className="text-xs font-medium text-center"
-            style={{ width: STAGE_W, color: '#64748b', flexShrink: 0 }}
-          >
-            {bar.label}
-          </div>
-        ))}
-      </div>
-
-      {/* SVG funnel */}
-      <svg
-        viewBox={`0 0 ${SVG_W} ${FUNNEL_H}`}
-        style={{ width: '100%', height: FUNNEL_H, display: 'block' }}
-        preserveAspectRatio="xMidYMid meet"
-      >
-        <defs>
-          {bars.slice(0, -1).map((bar, i) => (
-            <linearGradient
-              key={`lg-${i}`}
-              id={`funnelGrad-${i}`}
-              x1="0" y1="0" x2="1" y2="0"
-            >
-              <stop offset="0%" stopColor={bar.color} stopOpacity={0.9} />
-              <stop offset="100%" stopColor={bars[i + 1].color} stopOpacity={0.9} />
-            </linearGradient>
-          ))}
-        </defs>
-
-        {/* Trapezoid connectors */}
-        {bars.slice(0, -1).map((bar, i) => {
-          const next = bars[i + 1]
-          const x1 = bar.x + STAGE_W
-          const x2 = next.x
-          return (
-            <path
-              key={`trap-${i}`}
-              d={`M ${x1} ${bar.yTop} L ${x2} ${next.yTop} L ${x2} ${next.yBot} L ${x1} ${bar.yBot} Z`}
-              fill={`url(#funnelGrad-${i})`}
-              opacity={0.55}
-            />
-          )
-        })}
-
-        {/* Bars */}
-        {bars.map((bar, i) => (
-          <g key={bar.label}>
-            <rect
-              x={bar.x}
-              y={bar.yTop}
-              width={STAGE_W}
-              height={bar.h}
-              rx={4}
-              fill={bar.color}
-              opacity={0.92}
-            />
-            {/* Percentage label — only if bar is tall enough */}
-            {bar.h > 22 && (
-              <text
-                x={bar.x + STAGE_W / 2}
-                y={CENTER_Y + 5}
-                textAnchor="middle"
-                fill="white"
-                fontSize={bar.h > 40 ? 13 : 10}
-                fontWeight="700"
-                fontFamily="system-ui, sans-serif"
+    <div className="w-full flex flex-col items-center">
+      {bars.map((bar, i) => (
+        <div key={bar.label} className="w-full flex flex-col items-center">
+          {/* Conector com taxa de conversão entre etapas */}
+          {i > 0 && (
+            <div className="flex items-center gap-1.5 py-1.5">
+              <ArrowDown className="w-3 h-3" style={{ color: '#475569' }} />
+              <span
+                className="text-xs font-semibold tabular-nums px-2 py-0.5 rounded-full border"
+                style={{
+                  color: bar.color,
+                  borderColor: `${bar.color}40`,
+                  backgroundColor: `${bar.color}14`,
+                }}
               >
-                {bar.pct.toFixed(1)}%
-              </text>
-            )}
-          </g>
-        ))}
-      </svg>
+                {bar.stepRate != null ? `${Pct(bar.stepRate)}%` : '—'}
+              </span>
+            </div>
+          )}
 
-      {/* Absolute values */}
-      <div className="flex mt-1" style={{ paddingLeft: PAD, gap: GAP }}>
-        {bars.map(bar => (
+          {/* Barra da etapa */}
           <div
-            key={bar.label}
-            className="text-xs tabular-nums text-center"
-            style={{ width: STAGE_W, color: '#64748b', flexShrink: 0 }}
+            className="relative rounded-lg transition-all duration-500 ease-out overflow-hidden"
+            style={{
+              width: `${bar.width}%`,
+              background: `linear-gradient(90deg, ${bar.color}cc, ${bar.color}88)`,
+              boxShadow: `0 0 18px ${bar.color}26`,
+            }}
           >
-            {Num(bar.value)}
+            <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+              <span className="text-xs font-medium text-white/90 whitespace-nowrap">
+                {bar.label}
+              </span>
+              <span className="text-sm font-bold text-white tabular-nums whitespace-nowrap">
+                {Num(bar.value)}
+              </span>
+            </div>
           </div>
-        ))}
-      </div>
+
+          {/* % acumulado vs topo, discreto, só nas etapas finais */}
+          {i === bars.length - 1 && bar.value > 0 && (
+            <p className="text-[11px] mt-2 tabular-nums" style={{ color: '#475569' }}>
+              {Pct(bar.totalRate)}% do topo do funil
+            </p>
+          )}
+        </div>
+      ))}
     </div>
   )
 }
