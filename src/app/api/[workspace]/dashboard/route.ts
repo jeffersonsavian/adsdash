@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth'
 import { getWorkspaceOrFail } from '@/lib/workspace'
 import { prisma } from '@/lib/prisma'
 import { periodPresets, getPreviousPeriod } from '@/lib/metrics'
+import { dayRangeUtc } from '@/lib/dates'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -27,6 +28,10 @@ export async function GET(
 
     // Get previous period for comparison
     const prevPeriod = getPreviousPeriod(dateStart, dateEnd)
+
+    // Sales date range with timezone conversion
+    const saleDateRange = dayRangeUtc(dateStart, dateEnd, workspace.timezone)
+    const prevSaleDateRange = dayRangeUtc(prevPeriod.start, prevPeriod.end, workspace.timezone)
 
     // ===== CURRENT PERIOD =====
     // KPIs agregados do período atual
@@ -134,6 +139,130 @@ export async function GET(
       },
     })
 
+    // ===== SALES KPIs — CURRENT PERIOD =====
+    // Faturamento considera apenas vendas pagas
+    const currentSalesKpis = await prisma.sale.aggregate({
+      where: {
+        workspaceId: workspace.id,
+        saleDate: { gte: saleDateRange.gte, lte: saleDateRange.lte },
+        status: 'paid',
+      },
+      _sum: { grossAmount: true, netAmount: true },
+      _count: { id: true },
+    })
+
+    const paidSalesCount = currentSalesKpis._count.id
+
+    const refundedSalesData = await prisma.sale.aggregate({
+      where: {
+        workspaceId: workspace.id,
+        saleDate: { gte: saleDateRange.gte, lte: saleDateRange.lte },
+        status: 'refunded',
+      },
+      _sum: { netAmount: true },
+      _count: { id: true },
+    })
+
+    // Calculate real ROAS: netAmount (in cents) / 100 / spend (in reals)
+    const currentSpendReals = Number(currentKpis._sum.spend ?? 0)
+    const currentNetReais = (Number(currentSalesKpis._sum.netAmount ?? 0)) / 100
+    const currentRealRoas = currentSpendReals > 0 ? currentNetReais / currentSpendReals : 0
+
+    // ===== SALES KPIs — PREVIOUS PERIOD =====
+    const prevSalesKpis = await prisma.sale.aggregate({
+      where: {
+        workspaceId: workspace.id,
+        saleDate: { gte: prevSaleDateRange.gte, lte: prevSaleDateRange.lte },
+        status: 'paid',
+      },
+      _sum: { grossAmount: true, netAmount: true },
+      _count: { id: true },
+    })
+
+    const prevRefunded = await prisma.sale.aggregate({
+      where: {
+        workspaceId: workspace.id,
+        saleDate: { gte: prevSaleDateRange.gte, lte: prevSaleDateRange.lte },
+        status: 'refunded',
+      },
+      _sum: { netAmount: true },
+      _count: { id: true },
+    })
+
+    const prevSpendReals = Number(previousKpis._sum.spend ?? 0)
+    const prevNetReais = (Number(prevSalesKpis._sum.netAmount ?? 0)) / 100
+    const prevRealRoas = prevSpendReals > 0 ? prevNetReais / prevSpendReals : 0
+
+    // ===== SALES BY CAMPAIGN =====
+    const salesByCampaign = await prisma.sale.groupBy({
+      by: ['metaCampaignId'],
+      where: {
+        workspaceId: workspace.id,
+        saleDate: { gte: saleDateRange.gte, lte: saleDateRange.lte },
+        status: 'paid',
+      },
+      _sum: { netAmount: true },
+      _count: { id: true },
+    })
+
+    // Map sales to campaigns by metaCampaignId
+    const salesByMetaCampaignId = new Map<string, { count: number; revenueNet: number }>()
+    for (const sale of salesByCampaign) {
+      if (sale.metaCampaignId) {
+        const existing = salesByMetaCampaignId.get(sale.metaCampaignId) || { count: 0, revenueNet: 0 }
+        salesByMetaCampaignId.set(sale.metaCampaignId, {
+          count: existing.count + (sale._count.id || 0),
+          revenueNet: existing.revenueNet + (Number(sale._sum.netAmount ?? 0)) / 100,
+        })
+      }
+    }
+
+    // Enhance campaigns with sales data
+    const campaignsWithSales = currentCampaigns.map(c => {
+      const salesData = salesByMetaCampaignId.get(c.id) || { count: 0, revenueNet: 0 }
+      const realRoas = salesData.revenueNet > 0 && Number(c.spend) > 0
+        ? salesData.revenueNet / Number(c.spend)
+        : null
+      return {
+        ...c,
+        salesCount: salesData.count,
+        revenueNet: salesData.revenueNet,
+        realRoas,
+      }
+    })
+
+    // ===== DAILY REVENUE =====
+    // Agrupa por dia no fuso do workspace (saleDate é timestamp em UTC)
+    const currentDailyRevenue = await prisma.$queryRaw<
+      Array<{ day: Date; revenueNet: number }>
+    >`
+      SELECT
+        (("saleDate" AT TIME ZONE 'UTC') AT TIME ZONE ${workspace.timezone})::date AS day,
+        SUM(CAST("netAmount" AS BIGINT)) / 100.0 AS "revenueNet"
+      FROM sales
+      WHERE "workspaceId" = ${workspace.id}
+        AND status = 'paid'
+        AND "saleDate" >= ${saleDateRange.gte}
+        AND "saleDate" <= ${saleDateRange.lte}
+      GROUP BY day
+      ORDER BY day ASC
+    `
+
+    // Merge daily revenue into daily metrics
+    const dailyRevenueMap = new Map<string, number>()
+    for (const row of currentDailyRevenue) {
+      const dateStr = new Date(row.day).toISOString().split('T')[0]
+      dailyRevenueMap.set(dateStr, Number(row.revenueNet))
+    }
+
+    const currentDailyWithRevenue = currentDaily.map(d => {
+      const dateStr = new Date(d.date).toISOString().split('T')[0]
+      return {
+        ...d,
+        revenue: dailyRevenueMap.get(dateStr) ?? 0,
+      }
+    })
+
     return NextResponse.json({
       period: {
         start: dateStart,
@@ -144,11 +273,31 @@ export async function GET(
         end: prevPeriod.end,
       },
       kpis: {
-        current: currentKpis._sum,
-        previous: previousKpis._sum,
+        current: {
+          ...currentKpis._sum,
+          salesKpis: {
+            revenueGross: Number(currentSalesKpis._sum.grossAmount ?? 0) / 100,
+            revenueNet: currentNetReais,
+            salesCount: paidSalesCount,
+            refundedCount: refundedSalesData._count.id,
+            refundedAmount: (Number(refundedSalesData._sum.netAmount ?? 0)) / 100,
+            realRoas: currentRealRoas,
+          },
+        },
+        previous: {
+          ...previousKpis._sum,
+          salesKpis: {
+            revenueGross: Number(prevSalesKpis._sum.grossAmount ?? 0) / 100,
+            revenueNet: prevNetReais,
+            salesCount: prevSalesKpis._count.id,
+            refundedCount: prevRefunded._count.id,
+            refundedAmount: (Number(prevRefunded._sum.netAmount ?? 0)) / 100,
+            realRoas: prevRealRoas,
+          },
+        },
       },
-      daily: currentDaily,
-      campaigns: currentCampaigns,
+      daily: currentDailyWithRevenue,
+      campaigns: campaignsWithSales,
     })
   } catch (error: any) {
     console.error('Dashboard API error:', error)

@@ -17,6 +17,15 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+interface SalesKpis {
+  revenueGross: number
+  revenueNet: number
+  salesCount: number
+  refundedCount: number
+  refundedAmount: number
+  realRoas: number
+}
+
 interface KpiValues {
   spend: number | null
   impressions: number | null
@@ -24,14 +33,15 @@ interface KpiValues {
   leads: number | null
   purchases: number | null
   conversionValue: number | null
+  salesKpis?: SalesKpis
 }
 
 interface DashboardData {
   period: { start: string; end: string }
   previousPeriod: { start: string; end: string }
   kpis: { current: KpiValues; previous: KpiValues }
-  daily: Array<{ date: string | Date; spend: number; leads: number; purchases: number; cpl: number; roas: number }>
-  campaigns: Array<{ id: string; name: string; status: string | null; spend: number; impressions: number; clicks: number; leads: number; purchases: number; cpl: number | null; roas: number | null }>
+  daily: Array<{ date: string | Date; spend: number; leads: number; purchases: number; revenue?: number; cpl: number; roas: number }>
+  campaigns: Array<{ id: string; name: string; status: string | null; spend: number; impressions: number; clicks: number; leads: number; purchases: number; cpl: number | null; roas: number | null; salesCount?: number; revenueNet?: number; realRoas?: number | null }>
 }
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -178,6 +188,7 @@ export default function WorkspaceDashboardPage() {
     date: new Date(row.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
     Spend: Number(row.spend),
     Leads: Number(row.leads),
+    Revenue: Number(row.revenue ?? 0),
   }))
 
   return (
@@ -213,9 +224,9 @@ export default function WorkspaceDashboardPage() {
             Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
           ) : (
             <>
-              <KpiCard label="Faturamento" value={Number(curr?.conversionValue ?? 0)} prevValue={Number(prev?.conversionValue ?? 0)} icon={DollarSign} accent="#10b981" />
+              <KpiCard label="Faturamento (Meta)" value={Number(curr?.conversionValue ?? 0)} prevValue={Number(prev?.conversionValue ?? 0)} icon={DollarSign} accent="#10b981" />
               <KpiCard label="Custo de Anúncio" value={Number(curr?.spend ?? 0)} prevValue={Number(prev?.spend ?? 0)} icon={BarChart2} accent="#3b82f6" />
-              <KpiCard label="ROAS" value={roas} prevValue={prevRoas} icon={TrendingUp} accent="#8b5cf6" format="decimal" />
+              <KpiCard label="ROAS (Meta)" value={roas} prevValue={prevRoas} icon={TrendingUp} accent="#8b5cf6" format="decimal" />
               <KpiCard label="Leads" value={Number(curr?.leads ?? 0)} prevValue={Number(prev?.leads ?? 0)} icon={Users} accent="#f59e0b" format="number" />
             </>
           )}
@@ -235,40 +246,18 @@ export default function WorkspaceDashboardPage() {
           )}
         </div>
 
-        {/* ── Vendas (Hotmart/Kiwify) placeholders ── */}
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <p className="text-xs font-medium tracking-widest uppercase" style={{ color: '#475569' }}>Vendas</p>
-            <span className="px-2 py-0.5 rounded-full text-xs border" style={{ backgroundColor: '#f59e0b10', borderColor: '#f59e0b30', color: '#fbbf24' }}>
-              Requer integração
-            </span>
+        {/* ── Vendas (Hotmart/Kiwify) ── */}
+        {!loading && curr?.salesKpis && (
+          <div>
+            <p className="text-xs font-medium tracking-widest uppercase mb-3" style={{ color: '#475569' }}>Vendas (Hotmart/Kiwify)</p>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <KpiCard label="Faturamento Líquido" value={curr.salesKpis.revenueNet} prevValue={prev?.salesKpis?.revenueNet} icon={DollarSign} accent="#10b981" />
+              <KpiCard label="Vendas Finalizadas" value={curr.salesKpis.salesCount} prevValue={prev?.salesKpis?.salesCount} icon={ShoppingCart} accent="#3b82f6" format="number" />
+              <KpiCard label="ROAS Real" value={curr.salesKpis.realRoas} prevValue={prev?.salesKpis?.realRoas} icon={TrendingUp} accent="#8b5cf6" format="decimal" />
+              <KpiCard label="Reembolsos" value={curr.salesKpis.refundedCount} prevValue={prev?.salesKpis?.refundedCount} icon={AlertCircle} accent="#f59e0b" format="number" />
+            </div>
           </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { label: 'Faturamento Líquido', icon: DollarSign, accent: '#10b981' },
-              { label: 'Vendas Finalizadas',  icon: ShoppingCart, accent: '#3b82f6' },
-              { label: 'Taxa de Aprovação',   icon: Percent,      accent: '#8b5cf6' },
-              { label: 'Ticket Médio',        icon: CreditCard,   accent: '#f59e0b' },
-            ].map(({ label, icon: Icon, accent }) => (
-              <div key={label}
-                className="rounded-xl p-5 border border-dashed"
-                style={{ backgroundColor: '#111827', borderColor: '#1e293b' }}>
-                <div className="flex items-start justify-between mb-4">
-                  <p className="text-xs font-medium tracking-widest uppercase" style={{ color: '#475569' }}>{label}</p>
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${accent}1a` }}>
-                    <Icon className="w-4 h-4" style={{ color: accent, opacity: 0.4 }} />
-                  </div>
-                </div>
-                <p className="text-lg font-bold mb-1" style={{ color: '#334155' }}>—</p>
-                <button
-                  className="text-xs transition-opacity hover:opacity-80"
-                  style={{ color: '#3b82f6' }}>
-                  + Conectar Hotmart/Kiwify
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
+        )}
 
         {/* ── Row 2: Funil + Métricas ── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -335,6 +324,10 @@ export default function WorkspaceDashboardPage() {
                 <span className="inline-block w-3 h-0.5 rounded bg-emerald-500" />
                 Leads
               </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block w-3 h-0.5 rounded bg-purple-500" />
+                Receita
+              </span>
             </div>
           </div>
           {loading ? (
@@ -355,6 +348,10 @@ export default function WorkspaceDashboardPage() {
                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
                     <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                   </linearGradient>
+                  <linearGradient id="gRevenue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#a78bfa" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#a78bfa" stopOpacity={0} />
+                  </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                 <XAxis dataKey="date" tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
@@ -362,6 +359,7 @@ export default function WorkspaceDashboardPage() {
                 <Tooltip content={<ChartTooltip />} />
                 <Area type="monotone" dataKey="Spend" stroke="#3b82f6" strokeWidth={2} fill="url(#gSpend)" dot={false} />
                 <Area type="monotone" dataKey="Leads" stroke="#10b981" strokeWidth={2} fill="url(#gLeads)" dot={false} />
+                <Area type="monotone" dataKey="Revenue" stroke="#a78bfa" strokeWidth={2} fill="url(#gRevenue)" dot={false} />
               </AreaChart>
             </ResponsiveContainer>
           )}
@@ -380,21 +378,36 @@ export default function WorkspaceDashboardPage() {
                 Ver todas <ArrowRight className="w-3 h-3" />
               </a>
             </div>
-            <div className="divide-y" style={{ borderColor: '#1e293b' }}>
-              {data!.campaigns.slice(0, 5).map(c => {
-                const r = Number(c.roas ?? 0)
-                return (
-                  <div key={c.id} className="flex items-center gap-4 py-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate font-medium">{c.name}</p>
-                    </div>
-                    <span className="text-sm tabular-nums" style={{ color: '#94a3b8' }}>{R$(Number(c.spend))}</span>
-                    <span className={`text-xs font-semibold tabular-nums ${r >= 2 ? 'text-emerald-400' : r >= 1 ? 'text-yellow-400' : 'text-red-400'}`}>
-                      {r.toFixed(2)}x
-                    </span>
-                  </div>
-                )
-              })}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b" style={{ borderColor: '#1e293b' }}>
+                    <th className="text-left py-2.5 px-3 font-medium" style={{ color: '#94a3b8' }}>Campanha</th>
+                    <th className="text-right py-2.5 px-3 font-medium" style={{ color: '#94a3b8' }}>Gasto</th>
+                    <th className="text-right py-2.5 px-3 font-medium" style={{ color: '#94a3b8' }}>Vendas</th>
+                    <th className="text-right py-2.5 px-3 font-medium" style={{ color: '#94a3b8' }}>Receita</th>
+                    <th className="text-right py-2.5 px-3 font-medium" style={{ color: '#94a3b8' }}>ROAS Real</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y" style={{ borderColor: '#1e293b' }}>
+                  {data!.campaigns.slice(0, 5).map(c => {
+                    const r = Number(c.realRoas ?? c.roas ?? 0)
+                    return (
+                      <tr key={c.id} className="hover:bg-slate-800/30">
+                        <td className="py-2.5 px-3 truncate">{c.name}</td>
+                        <td className="text-right py-2.5 px-3 tabular-nums" style={{ color: '#94a3b8' }}>{R$(Number(c.spend))}</td>
+                        <td className="text-right py-2.5 px-3 tabular-nums font-medium">{c.salesCount ?? 0}</td>
+                        <td className="text-right py-2.5 px-3 tabular-nums font-medium">{R$(Number(c.revenueNet ?? 0))}</td>
+                        <td className="text-right py-2.5 px-3 font-semibold tabular-nums">
+                          <span className={`${r >= 2 ? 'text-emerald-400' : r >= 1 ? 'text-yellow-400' : 'text-red-400'}`}>
+                            {r.toFixed(2)}x
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
