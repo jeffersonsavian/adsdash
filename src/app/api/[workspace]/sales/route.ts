@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getWorkspaceForAdminOrFail } from '@/lib/workspace'
+import { dayRangeUtc, todayStr } from '@/lib/dates'
 import { NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 
@@ -28,18 +29,17 @@ export async function GET(
 
     const { searchParams } = new URL(req.url)
     const dateStart = searchParams.get('dateStart') || '2024-01-01'
-    const dateEnd = searchParams.get('dateEnd') || new Date().toISOString().split('T')[0]
+    const dateEnd = searchParams.get('dateEnd') || todayStr(workspaceRecord.timezone)
     const platform = searchParams.get('platform') || 'all'
     const status = searchParams.get('status') || 'all'
     const q = (searchParams.get('q') || '').trim()
 
-    // Fim do dia para incluir vendas do próprio dateEnd
-    const end = new Date(dateEnd)
-    end.setHours(23, 59, 59, 999)
+    // Apply timezone-aware date range
+    const dateRange = dayRangeUtc(dateStart, dateEnd, workspaceRecord.timezone)
 
     const where: Prisma.SaleWhereInput = {
       workspaceId: workspaceRecord.id,
-      saleDate: { gte: new Date(dateStart), lte: end },
+      saleDate: { gte: dateRange.gte, lte: dateRange.lte },
     }
 
     if (platform !== 'all') where.platform = platform
@@ -62,7 +62,7 @@ export async function GET(
         by: ['status'],
         where: {
           workspaceId: workspaceRecord.id,
-          saleDate: { gte: new Date(dateStart), lte: end },
+          saleDate: { gte: dateRange.gte, lte: dateRange.lte },
           ...(platform !== 'all' ? { platform } : {}),
         },
         _count: { _all: true },
